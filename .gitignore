@@ -1,0 +1,12 @@
+artifacts/
+tools/media-runtime/
+tools/voice-runtime/
+tools/__pycache__/
+config/elevenlabs-key.dpapi
+.env
+.env.*
+.cursor/mcp.json
+*.dpapi
+*.lic
+*.1CD
+1Cv8.1CD

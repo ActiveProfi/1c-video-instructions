@@ -1,0 +1,16 @@
+{
+  "provider": "edge-tts",
+  "preferred_male_voices": ["fr-FR-RemyMultilingualNeural", "de-DE-FlorianMultilingualNeural"],
+  "preferred_female_voices": ["pt-BR-ThalitaMultilingualNeural", "pFZP5JQG7iQjIQuC4Bku", "EXAVITQu4vr4xnSDxMaL"],
+  "voices": [
+    {"name":"Реми","id":"fr-FR-RemyMultilingualNeural","gender":"Male","preferred":true},
+    {"name":"Флориан","id":"de-DE-FlorianMultilingualNeural","gender":"Male","preferred":true},
+    {"name":"Ава","id":"en-US-AvaMultilingualNeural","gender":"Female","preferred":false},
+    {"name":"Эмма","id":"en-US-EmmaMultilingualNeural","gender":"Female","preferred":false},
+    {"name":"Вивьен","id":"fr-FR-VivienneMultilingualNeural","gender":"Female","preferred":false},
+    {"name":"Серафина","id":"de-DE-SeraphinaMultilingualNeural","gender":"Female","preferred":false},
+    {"name":"Талита","id":"pt-BR-ThalitaMultilingualNeural","gender":"Female","preferred":true},
+    {"name":"Лили","id":"pFZP5JQG7iQjIQuC4Bku","gender":"Female","preferred":true,"provider":"elevenlabs"},
+    {"name":"Сара","id":"EXAVITQu4vr4xnSDxMaL","gender":"Female","preferred":true,"provider":"elevenlabs"}
+  ]
+}

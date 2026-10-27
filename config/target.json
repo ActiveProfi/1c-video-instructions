@@ -1,0 +1,9 @@
+﻿{
+  "platform_version": "8.3.27.2214",
+  "configuration": "Бухгалтерия предприятия, редакция 3.0",
+  "configuration_version": "3.0.197.22",
+  "extensions": ["EF_202", "EF_188", "EF_00_00864870", "EF_70145546", "EF_3855", "EF_3812", "EF_3843"],
+  "extension_versions": {"EF_70145546": "1.0"},
+  "execution_backend": "unverified",
+  "vanessa_required": false
+}
