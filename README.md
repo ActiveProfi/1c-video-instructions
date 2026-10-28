@@ -25,8 +25,8 @@
 
 ## Шаг 1. Что поставить на Windows
 
-1. Python 3.11 или новее с сайта python.org. При установке отметьте «Add python to PATH».
-2. В папке проекта откройте PowerShell и выполните:
+1. Python 3.11 или новее с сайта python.org. Галочка «Add python to PATH» удобна, но не обязательна: на Windows часто работает только команда `py -3`. Файлы `Собрать учебный урок.cmd` и `Записать урок в 1С.cmd` сначала пробуют `py -3`, и только если лаунчера нет — `python`.
+2. В папке проекта откройте PowerShell. Если `python` не находится, в командах ниже пишите `py -3` вместо `python`. Пример: `py -3 -m pip install -r requirements.txt`. Дальше в тексте для краткости написано `python`.
 
 ```powershell
 python -m pip install -r requirements.txt

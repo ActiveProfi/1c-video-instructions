@@ -14,7 +14,7 @@ if /I not "%OK%"=="YES" (
   pause
   exit /b 1
 )
-python -m pipeline run --driver windows --confirm-training-copy --tts auto
+call "%~dp0tools\Run-Py.cmd" -m pipeline run --driver windows --confirm-training-copy --tts auto
 if errorlevel 1 (
   echo.
   echo Запись остановилась. Прочитайте текст выше: чаще всего не совпала подпись кнопки.

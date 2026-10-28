@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
-import subprocess
 import wave
 from pathlib import Path
 
 from pipeline.frames import annotate_frame, render_title_card
+from pipeline.proc import loads_json, run_captured, text_of
 from pipeline.tts import speak_clip
 
 
@@ -22,13 +21,10 @@ def _ffprobe() -> str:
 
 
 def run_ffmpeg(args: list[str]) -> None:
-    result = subprocess.run(
-        [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", *args],
-        capture_output=True,
-        text=True,
-    )
+    result = run_captured([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", *args])
     if result.returncode:
-        raise RuntimeError("ffmpeg не собрал фрагмент: " + (result.stderr or "")[-1500:])
+        detail = text_of(result.stderr).strip() or text_of(result.stdout).strip()
+        raise RuntimeError("ffmpeg не собрал фрагмент: " + detail[-1500:])
 
 
 def wav_duration(path: Path) -> float:
@@ -117,25 +113,54 @@ def _encode_still(png: Path, duration: float, dest: Path) -> None:
     )
 
 
-def _concat(paths: list[Path], dest: Path, copy: bool) -> None:
-    listing = dest.with_suffix(".txt")
-    lines = []
+def _concat(paths: list[Path], dest: Path, with_audio: bool) -> None:
+    """Склеивает ролики аргументами ffmpeg, без текстового списка.
+
+    Список файлов на русском Windows читался бы в кодировке cp1251 и ломал
+    путь с русскими буквами. Аргументы командной строки такой проблемы не имеют.
+    """
+    if not paths:
+        raise RuntimeError("Нет фрагментов для склейки.")
+    if len(paths) == 1:
+        if with_audio:
+            run_ffmpeg(
+                [
+                    "-i",
+                    str(paths[0]),
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "23",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-movflags",
+                    "+faststart",
+                    str(dest),
+                ]
+            )
+        else:
+            run_ffmpeg(["-i", str(paths[0]), "-c", "copy", str(dest)])
+        return
+    args: list[str] = []
     for path in paths:
-        # В файле списка ffmpeg обратная косая черта — это спецсимвол, поэтому на Windows нужен прямой слэш.
-        safe = str(path.resolve()).replace("\\", "/").replace("'", "'\\''")
-        lines.append(f"file '{safe}'")
-    listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    if copy:
-        run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(dest)])
-    else:
-        run_ffmpeg(
+        args.extend(["-i", str(path)])
+    count = len(paths)
+    if with_audio:
+        chain = "".join(f"[{index}:v][{index}:a]" for index in range(count))
+        args.extend(
             [
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(listing),
+                "-filter_complex",
+                f"{chain}concat=n={count}:v=1:a=1[v][a]",
+                "-map",
+                "[v]",
+                "-map",
+                "[a]",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -153,6 +178,27 @@ def _concat(paths: list[Path], dest: Path, copy: bool) -> None:
                 str(dest),
             ]
         )
+    else:
+        chain = "".join(f"[{index}:v]" for index in range(count))
+        args.extend(
+            [
+                "-filter_complex",
+                f"{chain}concat=n={count}:v=1:a=0[v]",
+                "-map",
+                "[v]",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
+                str(dest),
+            ]
+        )
+    run_ffmpeg(args)
 
 
 def _mux(video: Path, audio: Path, dest: Path) -> None:
@@ -184,7 +230,7 @@ def _resolve_frame(out_dir: Path, frame: str) -> Path:
 
 
 def verify_media(path: Path) -> dict:
-    probe = subprocess.run(
+    probe = run_captured(
         [
             _ffprobe(),
             "-v",
@@ -194,24 +240,19 @@ def verify_media(path: Path) -> dict:
             "-of",
             "json",
             str(path),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+        ]
     )
     if probe.returncode:
-        raise RuntimeError("ffprobe не прочитал готовый файл: " + (probe.stderr or "")[-800:])
-    data = json.loads(probe.stdout)
+        detail = text_of(probe.stderr).strip() or text_of(probe.stdout).strip()
+        raise RuntimeError("ffprobe не прочитал готовый файл: " + detail[-800:])
+    data = loads_json(probe.stdout, "ffprobe")
     kinds = {stream.get("codec_type"): stream.get("codec_name") for stream in data.get("streams") or []}
     if "video" not in kinds or "audio" not in kinds:
         raise RuntimeError("В готовом файле нет и картинки, и звука.")
-    decode = subprocess.run(
-        [_ffmpeg(), "-v", "error", "-i", str(path), "-f", "null", "-"],
-        capture_output=True,
-        text=True,
-    )
+    decode = run_captured([_ffmpeg(), "-v", "error", "-i", str(path), "-f", "null", "-"])
     if decode.returncode:
-        raise RuntimeError("Готовый файл не декодируется: " + (decode.stderr or "")[-800:])
+        detail = text_of(decode.stderr).strip() or text_of(decode.stdout).strip()
+        raise RuntimeError("Готовый файл не декодируется: " + detail[-800:])
     return {
         "video": kinds["video"],
         "audio": kinds["audio"],
@@ -286,7 +327,7 @@ def assemble(plan: dict, journal: dict, out_dir: Path, provider: str, voice: str
             _encode_still(frame, step_duration, silent)
             silent_parts.append(silent)
         silent_scene = build / f"{scene['id']}-silent.mp4"
-        _concat(silent_parts, silent_scene, copy=True)
+        _concat(silent_parts, silent_scene, with_audio=False)
         mixed = build / f"{scene['id']}.mp4"
         _mux(silent_scene, audio, mixed)
         pieces.append(mixed)
@@ -301,7 +342,7 @@ def assemble(plan: dict, journal: dict, out_dir: Path, provider: str, voice: str
     )
 
     video = out_dir / "lesson.mp4"
-    _concat(pieces, video, copy=False)
+    _concat(pieces, video, with_audio=True)
     srt_path = out_dir / "subtitles.srt"
     write_srt(cues, srt_path)
     checked = verify_media(video)

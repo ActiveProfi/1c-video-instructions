@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class PipelineEndToEndTest(unittest.TestCase):
     def test_mock_lesson_produces_video(self):
         with tempfile.TemporaryDirectory() as folder:
-            out = Path(folder) / "lesson"
+            out = Path(folder) / "Урок  1С"
             result = execute(
                 ROOT,
                 {

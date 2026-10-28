@@ -18,7 +18,7 @@ FONT_PATH = 'C:/Windows/Fonts/arial.ttf'
 
 
 def run(args):
-    result = subprocess.run([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', *args], capture_output=True, text=True)
+    result = subprocess.run([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', *args], capture_output=True, text=True, encoding='utf-8', errors='replace')
     if result.returncode:
         raise RuntimeError(result.stderr)
 

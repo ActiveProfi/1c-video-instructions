@@ -12,12 +12,13 @@ import math
 import os
 import random
 import shutil
-import subprocess
 import unicodedata
 import urllib.request
 import wave
 from array import array
 from pathlib import Path
+
+from pipeline.proc import run_captured, text_of
 
 ROOT_TOOLS = Path(__file__).resolve().parents[1] / "tools"
 
@@ -145,7 +146,10 @@ def synthesize_espeak(text: str, dest: Path) -> None:
     if not binary:
         raise RuntimeError("Не найден espeak-ng. Установите его или выберите --tts offline.")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([binary, "-v", "ru", "-s", "150", "-w", str(dest), text], check=True)
+    result = run_captured([binary, "-v", "ru", "-s", "150", "-w", str(dest), text])
+    if result.returncode:
+        detail = text_of(result.stderr).strip() or text_of(result.stdout).strip()
+        raise RuntimeError("espeak не озвучил фрагмент: " + detail[-800:])
 
 
 def synthesize_edge(text: str, voice: str, dest: Path) -> None:
@@ -165,10 +169,12 @@ def synthesize_edge(text: str, voice: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     mp3 = dest.with_suffix(".mp3")
     asyncio.run(_save(mp3))
-    subprocess.run(
-        [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)],
-        check=True,
+    result = run_captured(
+        [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)]
     )
+    if result.returncode:
+        detail = text_of(result.stderr).strip() or text_of(result.stdout).strip()
+        raise RuntimeError("Не удалось преобразовать голос Edge в wav: " + detail[-800:])
 
 
 def synthesize_elevenlabs(text: str, voice: str, dest: Path, project_root: Path) -> None:
@@ -203,10 +209,12 @@ def synthesize_elevenlabs(text: str, voice: str, dest: Path, project_root: Path)
         raise RuntimeError(
             "ElevenLabs не озвучил фрагмент. Проверьте ключ, голос и остаток кредитов."
         ) from error
-    subprocess.run(
-        [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)],
-        check=True,
+    result = run_captured(
+        [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)]
     )
+    if result.returncode:
+        detail = text_of(result.stderr).strip() or text_of(result.stdout).strip()
+        raise RuntimeError("Не удалось преобразовать голос ElevenLabs в wav: " + detail[-800:])
 
 
 def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: Path) -> str:

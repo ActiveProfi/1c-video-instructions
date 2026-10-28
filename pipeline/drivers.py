@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 from pipeline.frames import apply_compute, render_screen
+from pipeline.proc import run_captured, text_of
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -111,13 +111,7 @@ class WindowsUiDriver:
         script = self.project_root / "tools" / "Run-LessonPlan.ps1"
         if not script.exists():
             raise RuntimeError(f"Не найден локальный исполнитель: {script}")
-        completed = subprocess.run(
-            windows_argv(self.project_root, out_dir, self.process_id, self.dry_run),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        completed = run_captured(windows_argv(self.project_root, out_dir, self.process_id, self.dry_run))
         journal_path = out_dir / "journal.json"
         detail = ""
         if journal_path.exists():
@@ -127,7 +121,7 @@ class WindowsUiDriver:
             except json.JSONDecodeError:
                 detail = ""
         if completed.returncode != 0:
-            tail = ((completed.stdout or "") + "\n" + (completed.stderr or "")).strip()[-1500:]
+            tail = (text_of(completed.stdout) + "\n" + text_of(completed.stderr)).strip()[-1500:]
             raise RuntimeError(
                 "Запись в 1С остановилась. "
                 + (detail or "Смотрите текст ниже.")
