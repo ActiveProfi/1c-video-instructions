@@ -41,7 +41,7 @@ async def main():
                     raise RuntimeError(f'Voice {i}: service unavailable ({type(error).__name__})') from None
                 print(f'Voice {i}: retry {attempt+1} ({type(error).__name__})',flush=True)
                 await asyncio.sleep([5,15,30][attempt])
-        result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-hide_banner','-loglevel','error','-y','-i',str(mp3),'-ar','24000','-ac','1',str(wav)],capture_output=True,text=True)
+        result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-hide_banner','-loglevel','error','-y','-i',str(mp3),'-ar','24000','-ac','1',str(wav)],capture_output=True,text=True,encoding='utf-8',errors='replace')
         if result.returncode:
             raise RuntimeError(result.stderr)
         cache.write_text(json.dumps({'signature':signature,'voice':SPEC['voice'],'provider':'edge-tts'},indent=2),encoding='utf-8')

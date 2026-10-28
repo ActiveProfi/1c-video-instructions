@@ -1,0 +1,310 @@
+# Карта полного интерфейса «Такси» «1С:Бухгалтерия предприятия», редакция 3.0.
+# Это не выгрузка конфигурации: пути сверены с открытыми материалами 1С и со снимком
+# панели «Справочники» учебной базы. Где формулировка в релизах расходится, стоит confidence: medium или low.
+#
+# Главные источники:
+# - https://its.1c.ru/db/content/updinfoarch/src/accounting/3.0.104/index.htm
+#   полный интерфейс: «Справочники - Товары и услуги - Номенклатура»
+# - https://its.1c.ru/db/content/updinfo/src/accounting/3.0.203.24/index.html
+#   полный интерфейс: «Покупки - Внешняя торговля - Документы о предстоящей поставке товаров (ДОПП)»
+#   и «Покупки - Внешняя торговля - Заявления о ввозе товаров»
+#   «Операции - Закрытие периода - Отражение ДОПП в декларации»
+# - https://its.1c.ru/db/content/updinfo/src/accounting/3.0.201/index.html
+#   вариант пути 3.0.201: «Покупки - Покупки - Внешняя торговля - ...»
+# - https://its.1c.ru/db/content/spot/src/5101002%20п_спот.htm
+#   раздел Покупки, подраздел Внешняя торговля, документ «Документ о предстоящей поставке товаров»
+# - https://buh.ru/articles/posledovatelnost-provedeniya-dokumentov-pri-vvoze-tovarov-iz-eaes-v-programme-1s-bukhgalteriya-8.html
+# - https://v8.1c.ru/buhv8/
+# Снимок панели «Справочники» учебной базы подтверждает группы «Покупки и продажи» и «Товары и услуги».
+
+schema_version: 1
+configuration: Бухгалтерия предприятия, редакция 3.0
+interface: Такси
+buttons:
+  create:
+    title: Создать
+    aliases: [Создать]
+    role: button
+    forbidden: false
+    source: https://www.1cbit.kz/services/line_consult/faq/kak_v_1s_bukhgalterii_8_dobavit_uslugu_v_spravochnik_nomenklatura/
+    confidence: high
+  save_close:
+    title: Записать и закрыть
+    aliases: [Записать и закрыть, Записать]
+    role: button
+    forbidden: false
+    source: https://www.1cbit.kz/services/line_consult/faq/kak_v_1s_bukhgalterii_8_dobavit_uslugu_v_spravochnik_nomenklatura/
+    confidence: high
+  post_close:
+    title: Провести и закрыть
+    aliases: [Провести и закрыть, Провести]
+    role: button
+    forbidden: false
+    source: https://buh.ru/articles/posledovatelnost-provedeniya-dokumentov-pri-vvoze-tovarov-iz-eaes-v-programme-1s-bukhgalteriya-8.html
+    confidence: high
+  fill:
+    title: Заполнить
+    aliases: [Заполнить, Добавить]
+    role: button
+    forbidden: false
+    source: https://its.1c.ru/db/content/spot/src/5101002%20п_спот.htm
+    confidence: medium
+  pick:
+    title: Подбор
+    aliases: [Подбор]
+    role: button
+    forbidden: false
+    source: https://its.1c.ru/db/pubbunu30taxi
+    confidence: medium
+  entries:
+    title: Дт/Кт
+    aliases: [Дт/Кт, Дт Кт, Показать проводки]
+    role: button
+    forbidden: false
+    source: https://buh.ru/articles/posledovatelnost-provedeniya-dokumentov-pri-vvoze-tovarov-iz-eaes-v-programme-1s-bukhgalteriya-8.html
+    confidence: medium
+  send:
+    title: Отправить
+    aliases: [Отправить, Отправка]
+    role: button
+    forbidden: true
+    source: https://its.1c.ru/db/content/spot/src/5101002%20п_спот.htm
+    confidence: high
+  export:
+    title: Выгрузить
+    aliases: [Выгрузить]
+    role: button
+    forbidden: true
+    source: https://its.1c.ru/db/content/updinfo/src/accounting/3.0.203.24/index.html
+    confidence: high
+  delete:
+    title: Удалить
+    aliases: [Удалить, Пометить на удаление]
+    role: button
+    forbidden: true
+    source: https://v8.1c.ru/buhv8/
+    confidence: high
+
+entries:
+  nav.about:
+    title: О программе
+    path:
+      - {name: Главное меню, role: button, click: true, aliases: [Главное меню]}
+      - {name: Справка, role: menu, click: true, aliases: [Справка]}
+      - {name: О программе, role: menu, click: true, aliases: [О программе]}
+    form_title: О программе
+    source: https://v8.1c.ru/buhv8/
+    source_note: Команда платформы, не раздела конфигурации. В Такси она в меню с тремя чертами, пункт «Справка».
+    confidence: medium
+  settings.functionality:
+    title: Функциональность
+    path:
+      - {name: Главное, role: menu, click: true, aliases: [Главное]}
+      - {name: Настройки, role: text, click: false, aliases: [Настройки]}
+      - {name: Функциональность, role: hyperlink, within: Настройки, click: true, aliases: [Функциональность]}
+    form_title: Функциональность программы
+    tabs: [Главное, Банк и касса, Запасы, Торговля, Основные средства, Расчеты, Зарплата и кадры]
+    fields: [Импорт товаров, в том числе из ЕАЭС]
+    source: https://its.1c.ru/db/content/updinfo/src/accounting/3.0.198.19/index.html
+    source_note: Закладка флажка импорта в открытом тексте 3.0.203 не названа. В разных релизах это «Запасы» или «Торговля».
+    confidence: medium
+  catalog.counterparties:
+    title: Контрагенты
+    path:
+      - {name: Справочники, role: menu, click: true, aliases: [Справочники]}
+      - {name: Покупки и продажи, role: text, click: false, aliases: [Покупки и продажи]}
+      - {name: Контрагенты, role: hyperlink, within: Покупки и продажи, click: true, aliases: [Контрагенты]}
+    form_title: Контрагенты
+    fields: [Наименование, Страна регистрации]
+    source: https://its.1c.ru/db/content/updinfoarch/src/accounting/3.0.104/index.htm
+    source_note: Группа «Покупки и продажи» видна на снимке панели «Справочники» этой базы. В статье ИТС 3.0.104 так назван полный интерфейс справочников.
+    confidence: high
+  catalog.nomenclature:
+    title: Номенклатура
+    path:
+      - {name: Справочники, role: menu, click: true, aliases: [Справочники]}
+      - {name: Товары и услуги, role: text, click: false, aliases: [Товары и услуги]}
+      - {name: Номенклатура, role: hyperlink, within: Товары и услуги, click: true, aliases: [Номенклатура]}
+    form_title: Номенклатура
+    list_buttons: [Создать, Создать группу]
+    card_buttons: [Записать и закрыть, Записать]
+    fields: [Наименование, Вид номенклатуры, Код ТН ВЭД, Единица]
+    source: https://its.1c.ru/db/content/updinfoarch/src/accounting/3.0.104/index.htm
+    source_note: Дословно «Справочники - Товары и услуги - Номенклатура». Та же группа есть на снимке панели.
+    confidence: high
+  bank.statements:
+    title: Банковские выписки
+    path:
+      - {name: Банк и касса, role: menu, click: true, aliases: [Банк и касса]}
+      - {name: Банк, role: text, click: false, aliases: [Банк]}
+      - {name: Банковские выписки, role: hyperlink, within: Банк, click: true, aliases: [Банковские выписки]}
+    form_title: Банковские выписки
+    source: https://its.1c.ru/db/bp8doc
+    source_note: Раздел «Банк и касса» типовой. Имя группы «Банк» в открытой статье не процитировано дословно, поэтому confidence medium.
+    confidence: medium
+  bank.payments:
+    title: Платежные поручения
+    path:
+      - {name: Банк и касса, role: menu, click: true, aliases: [Банк и касса]}
+      - {name: Банк, role: text, click: false, aliases: [Банк]}
+      - {name: Платежные поручения, role: hyperlink, within: Банк, click: true, aliases: [Платежные поручения, Платежные поручения исходящие]}
+    form_title: Платежные поручения
+    fields: [Вид операции, Получатель, Сумма, Налог, КБК]
+    source: https://its.1c.ru/db/content/spot/src/5101002%20п_спот.htm
+    source_note: Статья СПОТ описывает уплату ОП платежным поручением. Точное имя команды журнала в этой статье не выделено.
+    confidence: medium
+  form.writeoff:
+    title: Списание с расчетного счета
+    path: []
+    form_title: Списание с расчетного счета
+    fields: [Вид операции, Сумма, Счет учета, Контрагент, Договор, Статья расходов]
+    create_on_basis_of: [Платежное поручение, Банковские выписки]
+    source: https://its.1c.ru/db/bp8doc
+    source_note: Документ создаётся из выписки или на основании платёжного поручения. Отдельной команды раздела с таким именем может не быть.
+    confidence: medium
+  purchases.receipt:
+    title: Поступление (акты, накладные, УПД)
+    path:
+      - {name: Покупки, role: menu, click: true, aliases: [Покупки]}
+      - {name: Покупки, role: text, click: false, aliases: [Покупки]}
+      - {name: Поступление (акты, накладные, УПД), role: hyperlink, within: Покупки, click: true, aliases: [Поступление (акты, накладные, УПД), Поступление товаров]}
+    form_title: Поступление (акт, накладная, УПД)
+    kinds: [Товары, Услуги, Товары, услуги, комиссия]
+    buttons: [Создать, Провести и закрыть, Создать на основании]
+    tables: [Товары]
+    source: https://its.1c.ru/db/content/updinfo/src/accounting/3.0.203.24/index.html
+    source_note: В 3.0.203 поступление создают на основании ДОПП. Имя журнала устойчиво для полного интерфейса.
+    confidence: high
+  purchases.extra:
+    title: Поступление доп. расходов
+    path:
+      - {name: Покупки, role: menu, click: true, aliases: [Покупки]}
+      - {name: Покупки, role: text, click: false, aliases: [Покупки]}
+      - {name: Поступление доп. расходов, role: hyperlink, within: Покупки, click: true, aliases: [Поступление доп. расходов]}
+    form_title: Поступление доп. расходов
+    fields: [Контрагент, Сумма, Способ распределения]
+    tables: [Товары]
+    source: https://its.1c.ru/db/pubbunu30taxi
+    source_note: Книга ИТС «Бухгалтерский и налоговый учет», раздел «Учет дополнительных расходов». Точная группа панели в открытом оглавлении не процитирована.
+    confidence: medium
+  purchases.dopp:
+    title: Документы о предстоящей поставке товаров (ДОПП)
+    path:
+      - {name: Покупки, role: menu, click: true, aliases: [Покупки]}
+      - {name: Внешняя торговля, role: text, click: false, aliases: [Внешняя торговля]}
+      - {name: Документы о предстоящей поставке товаров (ДОПП), role: hyperlink, within: Внешняя торговля, click: true, aliases: [Документы о предстоящей поставке товаров (ДОПП), Документ о предстоящей поставке товаров]}
+    form_title: Документ о предстоящей поставке товаров
+    fields: [Дата ввоза, Договор, Признак ДОПП, Признак заявителя, Перевозчик, Госномер авто]
+    tables: [Товары]
+    table_columns: [Номенклатура, Код ТН ВЭД, Количество, Фактурная стоимость, Страна происхождения, НДС, Обеспечительный платеж]
+    source: https://its.1c.ru/db/content/updinfo/src/accounting/3.0.203.24/index.html
+    source_note: Дословно для полного интерфейса. В 3.0.201 перед «Внешняя торговля» в тексте есть повтор «Покупки». Поле даты в статье СПОТ названо «Дата ввоза», в уроке — «Планируемая дата ввоза».
+    confidence: high
+  purchases.import_app:
+    title: Заявления о ввозе товаров
+    path:
+      - {name: Покупки, role: menu, click: true, aliases: [Покупки]}
+      - {name: Внешняя торговля, role: text, click: false, aliases: [Внешняя торговля, Покупки]}
+      - {name: Заявления о ввозе товаров, role: hyperlink, within: Внешняя торговля, click: true, aliases: [Заявления о ввозе товаров, Заявление о ввозе товаров]}
+    form_title: Заявление о ввозе товаров
+    fields: [Вид транспорта, Курс, Налоговая база, Ставка НДС, НДС]
+    source: https://its.1c.ru/db/content/updinfo/src/accounting/3.0.203.24/index.html
+    source_note: Дословно «Покупки - Внешняя торговля - Заявления о ввозе товаров». Раньше журнал был в группе «Покупки», не «Внешняя торговля».
+    confidence: high
+  purchases.gtd:
+    title: ГТД по импорту
+    path:
+      - {name: Покупки, role: menu, click: true, aliases: [Покупки]}
+      - {name: Внешняя торговля, role: text, click: false, aliases: [Внешняя торговля, Покупки]}
+      - {name: ГТД по импорту, role: hyperlink, within: Внешняя торговля, click: true, aliases: [ГТД по импорту, Таможенная декларация на импорт]}
+    form_title: ГТД по импорту
+    tabs: [Главное, Разделы ГТД]
+    fields: [Таможня, Номер ГТД, Номер декларации, Таможенный сбор, Таможенная стоимость, Ставка пошлины, Сумма пошлины, Ставка НДС, Сумма НДС]
+    source: https://buhexpert8.ru/1s-buhgalteriya/lajfhaki-dlya-buhgaltera/putevoditel-po-dokumentam/pokupki/dokument-gtd-po-importu.html
+    source_note: Журнал «Покупки — ГТД по импорту». Вкладка в методичке названа «Разделы ГТД», в уроке — «Разделы ДТ». Имя «таможенная декларация на импорт» в типовой команде не найдено.
+    confidence: medium
+  ops.month_close:
+    title: Закрытие месяца
+    path:
+      - {name: Операции, role: menu, click: true, aliases: [Операции]}
+      - {name: Закрытие периода, role: text, click: false, aliases: [Закрытие периода]}
+      - {name: Закрытие месяца, role: hyperlink, within: Закрытие периода, click: true, aliases: [Закрытие месяца]}
+    form_title: Закрытие месяца
+    source: https://buh.ru/articles/posledovatelnost-provedeniya-dokumentov-pri-vvoze-tovarov-iz-eaes-v-programme-1s-bukhgalteriya-8.html
+    source_note: Полный интерфейс «Операции — Закрытие периода — Закрытие месяца».
+    confidence: high
+  ops.dopp_decl:
+    title: Отражение ДОПП в декларации
+    path:
+      - {name: Операции, role: menu, click: true, aliases: [Операции]}
+      - {name: Закрытие периода, role: text, click: false, aliases: [Закрытие периода]}
+      - {name: Отражение ДОПП в декларации, role: hyperlink, within: Закрытие периода, click: true, aliases: [Отражение ДОПП в декларации, Отражение ДОПП в декларации по косвенным налогам]}
+    form_title: Отражение ДОПП в декларации по косвенным налогам
+    source: https://buh.ru/articles/posledovatelnost-provedeniya-dokumentov-pri-vvoze-tovarov-iz-eaes-v-programme-1s-bukhgalteriya-8.html
+    source_note: В статье БУХ.1С имя операции длиннее, чем в уроке. Оба варианта в aliases.
+    confidence: high
+  ops.vat_regs:
+    title: Регламентные операции НДС
+    path:
+      - {name: Операции, role: menu, click: true, aliases: [Операции]}
+      - {name: НДС, role: text, click: false, aliases: [НДС, Закрытие периода]}
+      - {name: Регламентные операции НДС, role: hyperlink, within: НДС, click: true, aliases: [Регламентные операции НДС, Регламентные операции по НДС]}
+    form_title: Регламентные операции НДС
+    documents: [Формирование записей книги покупок, Подтверждение оплаты НДС в бюджет]
+    source: https://its.1c.ru/db/bp8doc
+    source_note: Классический путь полного интерфейса. В части релизов группа называется не «НДС», а пункт лежит сразу в «Операции».
+    confidence: medium
+  reports.vat_assistant:
+    title: Отчетность по НДС
+    path:
+      - {name: Отчеты, role: menu, click: true, aliases: [Отчеты]}
+      - {name: НДС, role: text, click: false, aliases: [НДС]}
+      - {name: Отчетность по НДС, role: hyperlink, within: НДС, click: true, aliases: [Отчетность по НДС, Помощник по учету НДС]}
+    form_title: Отчетность по НДС
+    source: https://its.1c.ru/db/bp8doc
+    source_note: Помощник в интерфейсе часто называется «Отчетность по НДС», в уроке — «Помощник по учету НДС».
+    confidence: medium
+  reports.regulated:
+    title: Регламентированные отчеты
+    path:
+      - {name: Отчеты, role: menu, click: true, aliases: [Отчеты]}
+      - {name: 1С-Отчетность, role: text, click: false, aliases: [1С-Отчетность]}
+      - {name: Регламентированные отчеты, role: hyperlink, within: 1С-Отчетность, click: true, aliases: [Регламентированные отчеты, 1С-Отчетность]}
+    form_title: Регламентированные отчеты
+    reports: [Декларация по НДС, Косвенные налоги при импорте товаров, Декларация по налогу на прибыль]
+    source: https://its.1c.ru/db/content/updinfo/src/accounting/3.0.203.24/index.html
+    source_note: Декларация по косвенным налогам заполняется из регламентированной отчётности. Точный заголовок формы «Косвенные налоги при импорте товаров» в открытом абзаце 3.0.203 не повторён.
+    confidence: medium
+  reports.incoming:
+    title: Входящие
+    path:
+      - {name: Отчеты, role: menu, click: true, aliases: [Отчеты]}
+      - {name: 1С-Отчетность, role: hyperlink, click: true, aliases: [1С-Отчетность]}
+      - {name: Входящие, role: hyperlink, within: 1С-Отчетность, click: true, aliases: [Входящие]}
+    form_title: 1С-Отчетность
+    tabs: [Требования и уведомления]
+    source: https://its.1c.ru/db/content/spot/src/5101002%20п_спот.htm
+    source_note: Квитанция со статусом «Обеспечен» описана в статье СПОТ. Имя закладки сверено с уроком, не с дословной цитатой ИТС.
+    confidence: low
+  reports.osv_account:
+    title: Оборотно-сальдовая ведомость по счету
+    path:
+      - {name: Отчеты, role: menu, click: true, aliases: [Отчеты]}
+      - {name: Стандартные отчеты, role: text, click: false, aliases: [Стандартные отчеты]}
+      - {name: Оборотно-сальдовая ведомость по счету, role: hyperlink, within: Стандартные отчеты, click: true, aliases: [Оборотно-сальдовая ведомость по счету]}
+    form_title: Оборотно-сальдовая ведомость по счету
+    buttons: [Сформировать]
+    source: https://its.1c.ru/db/bp8doc
+    source_note: Стандартный отчёт. Группа «Стандартные отчеты» может быть скрыта настройкой панели.
+    confidence: medium
+  reports.tax_registers:
+    title: Регистры налогового учета
+    path:
+      - {name: Отчеты, role: menu, click: true, aliases: [Отчеты]}
+      - {name: Налог на прибыль, role: text, click: false, aliases: [Налог на прибыль, Регистры]}
+      - {name: Регистры налогового учета, role: hyperlink, click: true, aliases: [Регистры налогового учета, Регистры налогового учета по налогу на прибыль]}
+    form_title: Регистры налогового учета
+    registers: [Внереализационные расходы, Стоимость товаров на складе]
+    source: https://its.1c.ru/db/bp8doc
+    source_note: Регистры есть в типовой БП 3.0. Точная группа панели в открытом фрагменте не процитирована.
+    confidence: medium
