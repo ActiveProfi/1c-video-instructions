@@ -5,7 +5,79 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from pipeline.live import run_dry, run_record
 from pipeline.run import execute, load_request, slugify
+from pipeline.tnved import assess_tnved, read_smartphone_tnved, write_report
+from pipeline.ui_session import PywinautoSession, EscWatcher
+
+
+def _require_training(args) -> bool:
+    if args.confirm_training_copy:
+        return True
+    print(
+        "Добавьте --confirm-training-copy только если открыта учебная копия «Альфа ООО», не рабочая база.",
+        flush=True,
+    )
+    return False
+
+
+def _live(root: Path, args) -> int:
+    if not _require_training(args):
+        return 1
+    if not args.lesson:
+        print("Укажите урок, например: --lesson lessons/lesson1.yaml", flush=True)
+        return 1
+    lesson = Path(args.lesson)
+    if not lesson.is_absolute():
+        lesson = root / lesson
+    out = Path(args.out) if args.out else root / "artifacts" / "lessons" / lesson.stem
+    if not out.is_absolute():
+        out = root / out
+    if args.dry_run:
+        report = run_dry(lesson, out)
+        print(
+            f"Пробный прогон. Найдено: {len(report.get('found') or [])}. "
+            f"Не найдено: {len(report.get('missing') or [])}. Запись не велась, документы не проводились.",
+            flush=True,
+        )
+        if not report.get("organization_seen", True):
+            print("В окне не видно организацию «Альфа ООО».", flush=True)
+        for name in report.get("missing") or []:
+            print(f"Нет на экране: {name}", flush=True)
+        print(f"Отчёт: {out / 'dry-run.json'}", flush=True)
+        return 1 if report.get("status") == "stopped" else 0
+    result = run_record(
+        lesson,
+        out,
+        root,
+        args.tts or "auto",
+        args.voice or "ru-RU-DmitryNeural",
+    )
+    if result.get("status") != "recorded":
+        print(result.get("message") or "Запись не завершена.", flush=True)
+        return 1
+    print(f"Готово: {result['video']}", flush=True)
+    return 0
+
+
+def _tnved(root: Path, args) -> int:
+    if not _require_training(args):
+        return 1
+    session = PywinautoSession(EscWatcher())
+    session.connect()
+    code = read_smartphone_tnved(session)
+    report = assess_tnved(code)
+    out = Path(args.out) if args.out else root / "artifacts" / "tnved-report.json"
+    if not out.is_absolute():
+        out = root / out
+    write_report(out, report)
+    print(f"Код ТН ВЭД в карточке: {code}", flush=True)
+    if report["warning"]:
+        print(report["warning"], flush=True)
+        return 2
+    print(f"Код совпадает с {report['expected']}. Ставка сбора 73 860 ₽ по ПП РФ № 1637 для этого кода предусмотрена постановлением.", flush=True)
+    print(f"Отчёт: {out}", flush=True)
+    return 0
 
 
 def project_root() -> Path:
@@ -16,7 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Собрать видеоурок по 1С: сценарий, шаги, запись и монтаж."
     )
-    parser.add_argument("command", nargs="?", default="run", choices=["run"])
+    parser.add_argument("command", nargs="?", default="run", choices=["run", "live", "tnved"])
+    parser.add_argument("--lesson", default=None, help="Файл урока YAML, например lessons/lesson1.yaml")
     parser.add_argument("--request", default=None, help="JSON с темой и конфигурацией")
     parser.add_argument("--topic", default=None, help="Тема урока, если её нет в запросе")
     parser.add_argument("--configuration", default=None, help="Название конфигурации 1С")
@@ -37,6 +110,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = project_root()
+    try:
+        if args.command == "live":
+            return _live(root, args)
+        if args.command == "tnved":
+            return _tnved(root, args)
+    except Exception as error:
+        print(f"Остановка: {error}", flush=True)
+        return 1
     request = load_request(root, args.request)
     if args.topic:
         request["topic"] = args.topic
