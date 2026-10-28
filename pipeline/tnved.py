@@ -43,7 +43,13 @@ def open_nomenclature(session) -> None:
     try:
         section = session.find("Справочники", timeout=8, role="menu")
         session.click(section)
-        link = session.find("Номенклатура", timeout=8, role="hyperlink", within="Справочники")
+        if hasattr(session, "refresh"):
+            session.refresh(1.0)
+        try:
+            link = session.find("Номенклатура", timeout=4, role="hyperlink", within="Справочники")
+        except LookupError:
+            session.global_search("Номенклатура")
+            link = session.find("Номенклатура", timeout=4, role="hyperlink")
         session.click(link)
     except LookupError as error:
         raise RuntimeError(

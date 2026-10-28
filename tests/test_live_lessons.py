@@ -5,7 +5,8 @@ from pathlib import Path
 from pipeline.lesson_yaml import action_plan, is_forbidden_name, load_lesson
 from pipeline.live import dry_run, gdigrab_command, run_dry
 from pipeline.tnved import NOT_FOUND_MESSAGE, assess_tnved, ensure_smartphone, read_smartphone_tnved
-from pipeline.ui_session import EscWatcher, FakeSession, StopRequested, choose_match, guard_name
+from pipeline.tnved import open_nomenclature
+from pipeline.ui_session import EscWatcher, FakeSession, StopRequested, best_label, choose_match, guard_name, read_element_texts
 from pipeline.__main__ import main
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -165,6 +166,38 @@ class TnvedTest(unittest.TestCase):
         self.assertIn(("Код ТН ВЭД", "8517 13 000 0"), session.fills)
         self.assertNotIn("Удалить", session.clicks)
         self.assertIn("Записать и закрыть", session.clicks)
+
+    def test_label_hidden_from_window_text_is_still_found(self):
+        class Hidden:
+            def window_text(self):
+                return ""
+
+            class element_info:
+                name = "Номенклатура"
+                automation_id = "nav"
+
+            def legacy_properties(self):
+                return {"Value": "", "Help": "справочник", "Name": "Номенклатура"}
+
+        texts = read_element_texts(Hidden())
+        self.assertEqual(best_label(texts), "Номенклатура")
+        chosen, _note, _several = choose_match(
+            [{"name": "", "texts": texts, "role": "hyperlink", "parents": ["Справочники"], "visible": True}],
+            "Номенклатура",
+            role="hyperlink",
+        )
+        self.assertEqual(chosen["texts"]["name"], "Номенклатура")
+
+    def test_catalog_link_uses_global_search_when_the_panel_is_late(self):
+        session = FakeSession(["Справочники"], texts=["Альфа ООО"])
+        open_nomenclature(session)
+        self.assertEqual(session.searches, ["Номенклатура"])
+        self.assertIn("Номенклатура", session.clicks)
+
+    def test_home_tab_falls_back_to_the_known_corner(self):
+        session = FakeSession(["Главное"], texts=["Альфа ООО"])
+        self.assertEqual(session.return_home(), "coordinates")
+        self.assertEqual(session.cursor, (94, 41))
 
     def test_lesson_hints_cover_repeated_vat_label(self):
         lesson = load_lesson(ROOT / "lessons" / "lesson1.yaml")

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from pipeline.live import run_dry, run_record
 from pipeline.run import execute, load_request, slugify
 from pipeline.tnved import assess_tnved, read_smartphone_tnved, write_report
-from pipeline.ui_session import PywinautoSession, EscWatcher
+from pipeline.ui_session import EscWatcher, PywinautoSession, save_diagnostics
 
 
 def _require_training(args) -> bool:
@@ -76,9 +77,11 @@ def _tnved(root: Path, args) -> int:
         "warning": None,
         "message": "",
     }
+    session = None
     try:
         session = PywinautoSession(EscWatcher())
         session.connect()
+        session.prepare()
         code = read_smartphone_tnved(session)
         if not code:
             report["message"] = NOT_FOUND_MESSAGE
@@ -98,9 +101,42 @@ def _tnved(root: Path, args) -> int:
     except Exception as error:
         report["message"] = str(error)
         print(f"Остановка: {error}", flush=True)
+        if session is not None:
+            save_diagnostics(session, out.parent, str(error))
         return 1
     finally:
+        if session is not None:
+            try:
+                session.finish()
+            except Exception:
+                pass
         write_report(out, report)
+
+
+def _dump_ui(root: Path, args) -> int:
+    if not _require_training(args):
+        return 1
+    out = Path(args.out) if args.out else root / "artifacts" / "ui-dump.json"
+    if not out.is_absolute():
+        out = root / out
+    session = PywinautoSession(EscWatcher())
+    try:
+        session.connect()
+        rows = session.dump_ui()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"elements": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"Видимых элементов: {len(rows)}", flush=True)
+        print(f"Отчёт: {out}", flush=True)
+        return 0
+    except Exception as error:
+        print(f"Остановка: {error}", flush=True)
+        save_diagnostics(session, out.parent, str(error))
+        return 1
+    finally:
+        try:
+            session.finish()
+        except Exception:
+            pass
 
 
 def project_root() -> Path:
@@ -111,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Собрать видеоурок по 1С: сценарий, шаги, запись и монтаж."
     )
-    parser.add_argument("command", nargs="?", default="run", choices=["run", "live", "tnved"])
+    parser.add_argument("command", nargs="?", default="run", choices=["run", "live", "tnved", "dump-ui"])
     parser.add_argument("--lesson", default=None, help="Файл урока YAML, например lessons/lesson1.yaml")
     parser.add_argument("--request", default=None, help="JSON с темой и конфигурацией")
     parser.add_argument("--topic", default=None, help="Тема урока, если её нет в запросе")
@@ -138,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
             return _live(root, args)
         if args.command == "tnved":
             return _tnved(root, args)
+        if args.command == "dump-ui":
+            return _dump_ui(root, args)
     except Exception as error:
         print(f"Остановка: {error}", flush=True)
         return 1

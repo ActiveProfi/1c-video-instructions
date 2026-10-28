@@ -13,7 +13,7 @@ from pipeline.lesson_yaml import action_plan, load_lesson
 from pipeline.postprod import run_ffmpeg, wav_duration
 from pipeline.proc import text_of
 from pipeline.tts import speak_clip
-from pipeline.ui_session import EscWatcher, PywinautoSession, StopRequested
+from pipeline.ui_session import EscWatcher, PywinautoSession, StopRequested, save_diagnostics
 
 
 class Overlay:
@@ -167,6 +167,8 @@ def _kind_label(kind: str) -> str:
 def dry_run(session, lesson: dict, timeout: float = 0.8) -> dict:
     """Ищет подписи. Не проводит, не заполняет и не пишет видео."""
     session.connect()
+    if hasattr(session, "prepare"):
+        session.prepare()
     rows = []
     for scene in lesson["scenes"]:
         for action in action_plan(scene):
@@ -264,6 +266,8 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
     raw_error = ""
     try:
         session.connect()
+        if hasattr(session, "prepare"):
+            session.prepare()
         if not session.organization_visible(lesson["organization"]):
             raise RuntimeError(
                 f"В открытом окне не видно организацию «{lesson['organization']}». "
@@ -301,16 +305,34 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
                 if watcher:
                     watcher.poll()
                 try:
-                    _perform(session, overlay, action, scene)
+                    try:
+                        _perform(session, overlay, action, scene)
+                    except LookupError:
+                        if action["kind"] == "navigate" and hasattr(session, "global_search"):
+                            session.global_search(action["name"])
+                            _perform(session, overlay, action, scene)
+                        else:
+                            raise
                 except LookupError as error:
                     raise RuntimeError(
                         f"Шаг {scene['id']}: не найден элемент «{error}». "
                         "Откройте нужный раздел. Точную подпись можно взять из пробного прогона."
                     ) from None
                 time.sleep(0.15)
+    except Exception:
+        try:
+            save_diagnostics(session, out_dir, "запись урока остановилась")
+        except Exception:
+            pass
+        raise
     finally:
         raw_error = grab.stop()
         overlay.close()
+        if hasattr(session, "finish"):
+            try:
+                session.finish()
+            except Exception:
+                pass
     raw = out_dir / "raw-screen.mp4"
     if not raw.exists() or raw.stat().st_size < 1000:
         raise RuntimeError("Запись экрана не сохранилась. " + text_of(raw_error)[-500:])
@@ -459,17 +481,33 @@ def run_dry(lesson_path: Path, out_dir: Path, session=None) -> dict:
         "steps": [],
         "error": None,
     }
+    active = session
     try:
         lesson = load_lesson(lesson_path)
-        session = session or PywinautoSession(EscWatcher())
-        report = dry_run(session, lesson)
+        active = session or PywinautoSession(EscWatcher())
+        report = dry_run(active, lesson)
     except StopRequested as error:
         report["status"] = "stopped"
         report["error"] = str(error)
+        if active is not None:
+            try:
+                save_diagnostics(active, out_dir, str(error))
+            except Exception:
+                pass
     except Exception as error:
         report["status"] = "failed"
         report["error"] = str(error)
+        if active is not None:
+            try:
+                save_diagnostics(active, out_dir, str(error))
+            except Exception:
+                pass
     finally:
+        if active is not None and hasattr(active, "finish"):
+            try:
+                active.finish()
+            except Exception:
+                pass
         dump_json(out_dir / "dry-run.json", report)
     return report
 
