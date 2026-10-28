@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from pipeline.bp30_map import button, click_steps, load_map
 from pipeline.planner import UnsafeStep
 
 ARROW = re.compile(r"\s*(?:→|->)\s*")
@@ -175,8 +176,9 @@ def locator_for(item, kind: str, scene: dict) -> dict:
         role = str(item.get("role") or item.get("control_type") or "")
         within = str(item.get("within") or item.get("parent") or "")
         index = item.get("index")
+        aliases = list(item.get("aliases") or [])
     else:
-        name, role, within, index = str(item), "", "", None
+        name, role, within, index, aliases = str(item), "", "", None, []
     key = norm(name)
     if not role:
         if key in SECTIONS or kind == "navigate" and key in SECTIONS:
@@ -193,7 +195,7 @@ def locator_for(item, kind: str, scene: dict) -> dict:
             within = ""
     if index is None and key in AMBIGUOUS_FIELDS and role == "field":
         index = 0
-    return {"name": name, "role": role, "within": within, "index": index}
+    return {"name": name, "role": role, "within": within, "index": index, "aliases": aliases}
 
 
 def action_plan(scene: dict) -> list[dict]:
@@ -221,16 +223,24 @@ def action_plan(scene: dict) -> list[dict]:
             return
         actions.append(payload)
 
-    for item in scene.get("clicks") or []:
-        name = _locator_name(item)
-        if is_mutating_name(name):
-            add("mutate", item)
-        else:
-            add("navigate", item)
-    if not show_only and "создать" in action_text and not any(norm(item["name"]) == "создать" for item in actions):
-        add("mutate", "Создать")
+    if scene.get("ui_ref") and scene.get("navigate", True):
+        for step in click_steps(scene["ui_ref"], load_map()):
+            add("navigate", step)
+    else:
+        for item in scene.get("clicks") or []:
+            name = _locator_name(item)
+            if is_mutating_name(name):
+                add("mutate", item)
+            else:
+                add("navigate", item)
+    if not show_only and "на основании" in action_text:
+        add("mutate", {"name": "Создать на основании", "role": "button", "aliases": ["Создать на основании"]})
+    elif not show_only and "создать" in action_text and not any(norm(item["name"]) == "создать" for item in actions):
+        create = button("create")
+        add("mutate", {"name": create["title"], "role": create["role"], "aliases": create["aliases"]})
     if not show_only and "провести" in action_text and not any("провест" in norm(item["name"]) for item in actions):
-        add("mutate", "Провести")
+        post = button("post_close")
+        add("mutate", {"name": post["title"], "role": post["role"], "aliases": post["aliases"]})
     for item in scene.get("targets") or []:
         name = _locator_name(item)
         if any(norm(step["name"]) == norm(name) for step in actions):

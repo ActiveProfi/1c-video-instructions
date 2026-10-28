@@ -70,7 +70,7 @@ class DryRunTest(unittest.TestCase):
         self.assertIn("Главное", report["found"])
         self.assertTrue(report["organization_seen"])
         self.assertTrue(report["missing"])
-        self.assertIn("Провести", report["missing"])
+        self.assertTrue(any("Провести" in name for name in report["missing"]))
 
     def test_duplicate_vat_label_does_not_stop_the_pass(self):
         lesson = load_lesson(ROOT / "lessons" / "lesson1.yaml")

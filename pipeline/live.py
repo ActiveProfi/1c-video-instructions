@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from pipeline.frames import render_title_card
+from pipeline.bp30_map import find_first
 from pipeline.lesson_yaml import action_plan, load_lesson
 from pipeline.postprod import run_ffmpeg, wav_duration
 from pipeline.proc import text_of
@@ -188,13 +189,7 @@ def dry_run(session, lesson: dict, timeout: float = 0.8) -> dict:
                 "legal_note": scene["legal_note"],
             }
             try:
-                element = session.find(
-                    action["name"],
-                    timeout=timeout,
-                    role=action.get("role") or "",
-                    within=action.get("within") or "",
-                    index=action.get("index"),
-                )
+                element = find_first(session, action, timeout)
                 row["found"] = True
                 row["ambiguous"] = bool(getattr(element, "ambiguous", False))
                 row["note"] = getattr(element, "note", "") or ""
@@ -235,13 +230,7 @@ def _needs_smartphone(lesson: dict) -> bool:
 
 
 def _perform(session, overlay: Overlay, action: dict, scene: dict) -> None:
-    element = session.find(
-        action["name"],
-        timeout=8,
-        role=action.get("role") or "",
-        within=action.get("within") or "",
-        index=action.get("index"),
-    )
+    element = find_first(session, action, 8)
     caption = action["name"]
     subtitle = scene["narration"]
     if scene.get("legal_note"):

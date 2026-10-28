@@ -39,22 +39,26 @@ ITEM_NAME = "Смартфон"
 
 
 def open_nomenclature(session) -> None:
-    """Справочники → Номенклатура. Список только открывается."""
+    """Справочники → Товары и услуги → Номенклатура. Список только открывается."""
+    from pipeline.bp30_map import click_steps, find_first
+
     try:
-        section = session.find("Справочники", timeout=8, role="menu")
-        session.click(section)
-        if hasattr(session, "refresh"):
-            session.refresh(1.0)
-        try:
-            link = session.find("Номенклатура", timeout=4, role="hyperlink", within="Справочники")
-        except LookupError:
-            session.global_search("Номенклатура")
-            link = session.find("Номенклатура", timeout=4, role="hyperlink")
-        session.click(link)
+        for step in click_steps("catalog.nomenclature"):
+            if hasattr(session, "refresh") and step.get("role") == "hyperlink":
+                session.refresh(1.0)
+            try:
+                element = find_first(session, step, 4)
+            except LookupError:
+                if hasattr(session, "global_search"):
+                    session.global_search(step["name"])
+                    element = find_first(session, step, 4)
+                else:
+                    raise
+            session.click(element)
     except LookupError as error:
         raise RuntimeError(
-            f"Не удалось открыть Справочники → Номенклатура: на экране нет «{error}». "
-            "Оставьте главное окно 1С открытым."
+            "Не удалось открыть Справочники → Товары и услуги → Номенклатура: "
+            f"на экране нет «{error}». Оставьте главное окно 1С открытым."
         ) from None
 
 

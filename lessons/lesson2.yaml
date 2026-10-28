@@ -139,6 +139,8 @@ scenes:
     within: Контрагенты
     index: null
   fields: []
+  ui_ref: catalog.counterparties
+  navigate: true
 - id: '2'
   title: Покупки → Поступление (акты, накладные, УПД) → «Поступление» → «Товары»
   narration: 'Оформляем поступление смартфонов: 10 000 юаней, курс на дату принятия к учету — учебный,
@@ -201,6 +203,8 @@ scenes:
     within: Товары
     index: null
   fields: []
+  ui_ref: purchases.receipt
+  navigate: true
 - id: '3'
   title: Покупки → Поступление доп. расходов → Создать (или Поступление → «Создать на основании» → «Поступление
     доп. расходов»)
@@ -253,6 +257,8 @@ scenes:
     within: Поступление доп. расходов
     index: 0
   fields: []
+  ui_ref: purchases.extra
+  navigate: true
 - id: '4'
   title: Банк и касса → Банковские выписки → Списание
   narration: 'Таможенные платежи вносим заранее, авансом на лицевой счет таможни — это не ЕНП в налоговой.
@@ -292,6 +298,8 @@ scenes:
     within: Списание
     index: null
   fields: []
+  ui_ref: bank.statements
+  navigate: true
 - id: '5'
   title: Покупки → Внешняя торговля → ГТД по импорту → Создать (или Поступление → «Создать на основании»
     → «ГТД по импорту»)
@@ -371,6 +379,8 @@ scenes:
     within: ГТД по импорту
     index: null
   fields: []
+  ui_ref: purchases.gtd
+  navigate: true
 - id: '6'
   title: ГТД по импорту → закладка «Разделы ДТ»
   narration: 'Закладка «Разделы ДТ». Программа предлагает таможенную стоимость по инвойсу — 120 000. Вручную
@@ -423,6 +433,8 @@ scenes:
     within: Разделы ДТ
     index: 0
   fields: []
+  ui_ref: purchases.gtd
+  navigate: false
 - id: '7'
   title: ГТД по импорту → «Провести» → «Показать проводки (Дт/Кт)»
   narration: 'Проводим. Пошлина и сбор ушли в себестоимость, на 41.01. НДС — на 19.05, «НДС, уплаченный
@@ -458,6 +470,8 @@ scenes:
     within: Показать проводки (Дт/Кт)
     index: null
   fields: []
+  ui_ref: purchases.gtd
+  navigate: false
 - id: '8'
   title: Операции → Закрытие месяца → июнь 2026 → «Выполнить закрытие месяца» → операция «Переоценка валютных
     средств» → «Справка-расчет»
@@ -511,6 +525,8 @@ scenes:
     within: Справка-расчет
     index: null
   fields: []
+  ui_ref: ops.month_close
+  navigate: true
 - id: '9'
   title: Банк и касса → Банковские выписки → Списание (валютный счет CNY)
   narration: 10 июля платим поставщику 10 000 юаней по курсу 12,20 — это 122 000. Долг в учете был 125
@@ -548,6 +564,8 @@ scenes:
     within: Списание (валютный счет CNY
     index: null
   fields: []
+  ui_ref: bank.statements
+  navigate: true
 - id: '10'
   title: Банк и касса → Банковские выписки → Списание (рублевый счет)
   narration: Комиссия банка за валютный платеж — 4 000 рублей, прочие расходы. Это уже июль, в расходы
@@ -587,6 +605,8 @@ scenes:
     within: Списание (рублевый счет
     index: null
   fields: []
+  ui_ref: bank.statements
+  navigate: true
 - id: '11'
   title: Отчеты → Оборотно-сальдовая ведомость по счету → 60.21 и 76.09
   narration: 'И финальная проверка: оборотно-сальдовая ведомость по 60.21 и 76.09. Долг поставщику закрыт,
@@ -624,3 +644,5 @@ scenes:
     within: 60.21 и 76.09
     index: null
   fields: []
+  ui_ref: reports.osv_account
+  navigate: true
