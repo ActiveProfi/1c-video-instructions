@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 
 from pipeline.lesson_yaml import action_plan, is_forbidden_name, load_lesson
-from pipeline.live import dry_run, gdigrab_command
-from pipeline.tnved import assess_tnved, read_smartphone_tnved
-from pipeline.ui_session import EscWatcher, FakeSession, StopRequested, guard_name
+from pipeline.live import dry_run, gdigrab_command, run_dry
+from pipeline.tnved import NOT_FOUND_MESSAGE, assess_tnved, ensure_smartphone, read_smartphone_tnved
+from pipeline.ui_session import EscWatcher, FakeSession, StopRequested, choose_match, guard_name
 from pipeline.__main__ import main
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +71,35 @@ class DryRunTest(unittest.TestCase):
         self.assertTrue(report["missing"])
         self.assertIn("Провести", report["missing"])
 
+    def test_duplicate_vat_label_does_not_stop_the_pass(self):
+        lesson = load_lesson(ROOT / "lessons" / "lesson1.yaml")
+        names = list(HOME) + [
+            {"name": "НДС", "role": "text", "parent": "Главное", "visible": True},
+            {"name": "НДС", "role": "field", "parent": "Документы о предстоящей поставке", "visible": True},
+            {"name": "НДС", "role": "field", "parent": "Главное", "visible": False},
+        ]
+        session = FakeSession(names, texts=["Альфа ООО"])
+        report = dry_run(session, lesson, timeout=0.02)
+        vat_rows = [row for row in report["steps"] if row["element"] == "НДС"]
+        self.assertTrue(vat_rows)
+        self.assertTrue(all(row["found"] for row in vat_rows))
+        self.assertEqual(session.clicks, [])
+        self.assertEqual(report["status"], "checked")
+
+    def test_report_is_written_when_the_window_fails(self):
+        class Broken(FakeSession):
+            def connect(self):
+                raise RuntimeError("окно пропало")
+
+        lesson = ROOT / "lessons" / "lesson1.yaml"
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            report = run_dry(lesson, out, session=Broken([]))
+            saved = (out / "dry-run.json").read_text(encoding="utf-8")
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("окно пропало", saved)
+        self.assertFalse(report["recorded"])
+
     def test_escape_stops_the_pass(self):
         lesson = load_lesson(ROOT / "lessons" / "lesson1.yaml")
         watcher = EscWatcher()
@@ -97,6 +126,24 @@ class TnvedTest(unittest.TestCase):
         self.assertIn("1637", report["warning"])
         self.assertIn("8517 13 000 0", report["warning"])
 
+    def test_missing_item_is_a_quiet_message(self):
+        self.assertIn("будет создана", NOT_FOUND_MESSAGE)
+
+    def test_duplicate_label_prefers_the_field_in_the_form(self):
+        chosen, note, several = choose_match(
+            [
+                {"name": "НДС", "role": "text", "parents": ["Главное"], "visible": True},
+                {"name": "НДС", "role": "field", "parents": ["Заявление о ввозе"], "visible": True},
+                {"name": "НДС", "role": "field", "parents": ["Главное"], "visible": False},
+            ],
+            "НДС",
+            role="field",
+            within="Заявление о ввозе",
+        )
+        self.assertTrue(several)
+        self.assertEqual(chosen["parents"], ["Заявление о ввозе"])
+        self.assertIn("поле" if False else "field", note)
+
     def test_reader_uses_the_card_and_does_not_post(self):
         session = FakeSession(
             ["Справочники", "Номенклатура", "Смартфон", "Код ТН ВЭД"],
@@ -106,6 +153,28 @@ class TnvedTest(unittest.TestCase):
         self.assertEqual(code, "8517 12 000 0")
         self.assertNotIn("Провести", session.clicks)
         self.assertNotIn("Удалить", session.clicks)
+
+    def test_missing_smartphone_is_created_without_delete(self):
+        session = FakeSession(
+            ["Справочники", "Номенклатура", "Поиск", "Создать", "Наименование", "Код ТН ВЭД", "Записать и закрыть"],
+            texts=["Альфа ООО"],
+        )
+        result = ensure_smartphone(session)
+        self.assertTrue(result["created"])
+        self.assertIn(("Наименование", "Смартфон"), session.fills)
+        self.assertIn(("Код ТН ВЭД", "8517 13 000 0"), session.fills)
+        self.assertNotIn("Удалить", session.clicks)
+        self.assertIn("Записать и закрыть", session.clicks)
+
+    def test_lesson_hints_cover_repeated_vat_label(self):
+        lesson = load_lesson(ROOT / "lessons" / "lesson1.yaml")
+        vat = [
+            action for scene in lesson["scenes"] for action in action_plan(scene)
+            if action["name"] == "НДС"
+        ]
+        self.assertTrue(vat)
+        self.assertTrue(all(action["role"] == "field" for action in vat))
+        self.assertTrue(all(action["within"] for action in vat))
 
 
 class LaunchAndGrabTest(unittest.TestCase):

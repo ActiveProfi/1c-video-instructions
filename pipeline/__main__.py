@@ -63,21 +63,44 @@ def _live(root: Path, args) -> int:
 def _tnved(root: Path, args) -> int:
     if not _require_training(args):
         return 1
-    session = PywinautoSession(EscWatcher())
-    session.connect()
-    code = read_smartphone_tnved(session)
-    report = assess_tnved(code)
+    from pipeline.tnved import NOT_FOUND_MESSAGE
+
     out = Path(args.out) if args.out else root / "artifacts" / "tnved-report.json"
     if not out.is_absolute():
         out = root / out
-    write_report(out, report)
-    print(f"Код ТН ВЭД в карточке: {code}", flush=True)
-    if report["warning"]:
-        print(report["warning"], flush=True)
-        return 2
-    print(f"Код совпадает с {report['expected']}. Ставка сбора 73 860 ₽ по ПП РФ № 1637 для этого кода предусмотрена постановлением.", flush=True)
-    print(f"Отчёт: {out}", flush=True)
-    return 0
+    report = {
+        "found": False,
+        "code": None,
+        "expected": "8517 13 000 0",
+        "ok": False,
+        "warning": None,
+        "message": "",
+    }
+    try:
+        session = PywinautoSession(EscWatcher())
+        session.connect()
+        code = read_smartphone_tnved(session)
+        if not code:
+            report["message"] = NOT_FOUND_MESSAGE
+            print(NOT_FOUND_MESSAGE, flush=True)
+            print(f"Отчёт: {out}", flush=True)
+            return 0
+        checked = assess_tnved(code)
+        report.update(checked)
+        report["found"] = True
+        report["message"] = checked["warning"] or f"Код совпадает с {checked['expected']}."
+        print(f"Код ТН ВЭД в карточке: {code}", flush=True)
+        if checked["warning"]:
+            print(checked["warning"], flush=True)
+            return 2
+        print(report["message"], flush=True)
+        return 0
+    except Exception as error:
+        report["message"] = str(error)
+        print(f"Остановка: {error}", flush=True)
+        return 1
+    finally:
+        write_report(out, report)
 
 
 def project_root() -> Path:

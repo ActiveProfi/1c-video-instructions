@@ -117,11 +117,23 @@ scenes:
   highlight: Рамка на номере версии конфигурации
   show_only: false
   clicks:
-  - Главное меню
-  - Справка
-  - О программе
+  - name: Главное меню
+    role: menu
+    within: ''
+    index: null
+  - name: Справка
+    role: hyperlink
+    within: О программе
+    index: null
+  - name: О программе
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - О программе
+  - name: О программе
+    role: field
+    within: ''
+    index: null
   fields: []
 - id: '2'
   title: Главное → Настройки → Функциональность
@@ -137,13 +149,31 @@ scenes:
   highlight: Стрелка на флажок «Импорт товаров, в том числе из ЕАЭС»
   show_only: false
   clicks:
-  - Главное
-  - Настройки
-  - Функциональность
+  - name: Главное
+    role: menu
+    within: ''
+    index: null
+  - name: Настройки
+    role: hyperlink
+    within: Функциональность
+    index: null
+  - name: Функциональность
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Торговля
-  - Внешняя торговля
-  - Импорт товаров, в том числе из ЕАЭС
+  - name: Торговля
+    role: field
+    within: Функциональность
+    index: null
+  - name: Внешняя торговля
+    role: field
+    within: Функциональность
+    index: null
+  - name: Импорт товаров, в том числе из ЕАЭС
+    role: field
+    within: Функциональность
+    index: null
   fields: []
 - id: '3'
   title: Справочники → Контрагенты → ТОО «КазахСтанМаш»
@@ -160,14 +190,35 @@ scenes:
   highlight: Рамка на «Страна регистрации» и «Валюта» договора
   show_only: false
   clicks:
-  - Справочники
-  - Контрагенты
-  - ТОО «КазахСтанМаш»
+  - name: Справочники
+    role: menu
+    within: ''
+    index: null
+  - name: Контрагенты
+    role: hyperlink
+    within: ТОО «КазахСтанМаш»
+    index: null
+  - name: ТОО «КазахСтанМаш»
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Страна регистрации
-  - Договоры
-  - Вид договора
-  - Валюта
+  - name: Страна регистрации
+    role: field
+    within: ТОО «КазахСтанМаш»
+    index: null
+  - name: Договоры
+    role: field
+    within: ТОО «КазахСтанМаш»
+    index: null
+  - name: Вид договора
+    role: field
+    within: ТОО «КазахСтанМаш»
+    index: null
+  - name: Валюта
+    role: field
+    within: ТОО «КазахСтанМаш»
+    index: null
   fields: []
 - id: '4'
   title: Банк и касса → Банковские выписки → Списание (валютный счет)
@@ -185,12 +236,27 @@ scenes:
   highlight: Рамка на сумме в USD и на проводке Дт 60.22 Кт 52
   show_only: false
   clicks:
-  - Банк и касса
-  - Банковские выписки
-  - Списание (валютный счет
+  - name: Банк и касса
+    role: menu
+    within: ''
+    index: null
+  - name: Банковские выписки
+    role: hyperlink
+    within: Списание (валютный счет
+    index: null
+  - name: Списание (валютный счет
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Списание с расчетного счета
-  - Оплата поставщику
+  - name: Списание с расчетного счета
+    role: field
+    within: Списание (валютный счет
+    index: null
+  - name: Оплата поставщику
+    role: field
+    within: Списание (валютный счет
+    index: null
   fields: []
 - id: '5'
   title: Банк и касса → Банковские выписки → Списание (рублевый счет)
@@ -205,13 +271,31 @@ scenes:
   highlight: Стрелка на статью прочих расходов
   show_only: false
   clicks:
-  - Банк и касса
-  - Банковские выписки
-  - Списание (рублевый счет
+  - name: Банк и касса
+    role: menu
+    within: ''
+    index: null
+  - name: Банковские выписки
+    role: hyperlink
+    within: Списание (рублевый счет
+    index: null
+  - name: Списание (рублевый счет
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Списание с расчетного счета
-  - Комиссия банка
-  - Прочее списание
+  - name: Списание с расчетного счета
+    role: field
+    within: Списание (рублевый счет
+    index: null
+  - name: Комиссия банка
+    role: field
+    within: Списание (рублевый счет
+    index: null
+  - name: Прочее списание
+    role: field
+    within: Списание (рублевый счет
+    index: null
   fields: []
 - id: '6'
   title: Покупки → Внешняя торговля → Документы о предстоящей поставке товаров (ДОПП) → Создать
@@ -234,20 +318,59 @@ scenes:
   highlight: Рамка на «Планируемая дата ввоза»; стрелки на «Признак ДОПП» и «Признак заявителя»
   show_only: false
   clicks:
-  - Покупки
-  - Внешняя торговля
-  - Документы о предстоящей поставке товаров (ДОПП
-  - Создать
+  - name: Покупки
+    role: menu
+    within: ''
+    index: null
+  - name: Внешняя торговля
+    role: hyperlink
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
+  - name: Документы о предстоящей поставке товаров (ДОПП
+    role: hyperlink
+    within: ''
+    index: null
+  - name: Создать
+    role: button
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
   targets:
-  - Дата
-  - Планируемая дата ввоза
-  - Контрагент
-  - Договор
-  - Признак ДОПП
-  - Признак заявителя
-  - Перевозчик
-  - Госномер автомобиля
-  - Госномер прицепа
+  - name: Дата
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: 0
+  - name: Планируемая дата ввоза
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
+  - name: Контрагент
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: 0
+  - name: Договор
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: 0
+  - name: Признак ДОПП
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
+  - name: Признак заявителя
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
+  - name: Перевозчик
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
+  - name: Госномер автомобиля
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
+  - name: Госномер прицепа
+    role: field
+    within: Документы о предстоящей поставке товаров (ДОПП
+    index: null
   fields: []
 - id: '7'
   title: Тот же ДОПП → табличная часть «Товары» → кнопка «Заполнить» (по счету поставщика) или «Добавить»
@@ -268,16 +391,43 @@ scenes:
   highlight: Рамка на сумме ОП в подвале документа; плашка «Учебный курс 92,00»
   show_only: false
   clicks:
-  - табличная часть «Товары»
-  - кнопка «Заполнить» (по счету поставщика
+  - name: табличная часть «Товары»
+    role: hyperlink
+    within: ''
+    index: null
+  - name: кнопка «Заполнить» (по счету поставщика
+    role: ''
+    within: табличная часть «Товары»
+    index: null
   targets:
-  - Номенклатура
-  - Код ТН ВЭД
-  - Количество
-  - Фактурная стоимость
-  - Страна происхождения
-  - НДС
-  - Обеспечительный платеж
+  - name: Номенклатура
+    role: field
+    within: табличная часть «Товары»
+    index: 0
+  - name: Код ТН ВЭД
+    role: field
+    within: табличная часть «Товары»
+    index: 0
+  - name: Количество
+    role: field
+    within: табличная часть «Товары»
+    index: 0
+  - name: Фактурная стоимость
+    role: field
+    within: табличная часть «Товары»
+    index: null
+  - name: Страна происхождения
+    role: field
+    within: табличная часть «Товары»
+    index: null
+  - name: НДС
+    role: field
+    within: табличная часть «Товары»
+    index: 0
+  - name: Обеспечительный платеж
+    role: field
+    within: табличная часть «Товары»
+    index: null
   fields: []
 - id: '8'
   title: Тот же ДОПП → кнопка «Провести» → «Показать проводки (Дт/Кт)»
@@ -294,10 +444,19 @@ scenes:
   highlight: Рамка на проводке Дт 68.42 Кт 68.91
   show_only: false
   clicks:
-  - кнопка «Провести»
-  - Показать проводки (Дт/Кт)
+  - name: кнопка «Провести»
+    role: ''
+    within: Показать проводки (Дт/Кт)
+    index: null
+  - name: Показать проводки (Дт/Кт)
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Движения документа
+  - name: Движения документа
+    role: field
+    within: Показать проводки (Дт/Кт)
+    index: null
   fields: []
 - id: '9'
   title: ДОПП → подвал → ссылка «Документ о предстоящей поставке» (регламентированная форма) / Отчеты
@@ -318,14 +477,35 @@ scenes:
   highlight: Стрелка на «Отправить» с плашкой «В учебной базе не нажимаем»
   show_only: true
   clicks:
-  - ДОПП
-  - подвал
-  - ссылка «Документ о предстоящей поставке» (регламентированная форма) / Отчеты
-  - 1С-Отчетность
-  - Уведомления
+  - name: ДОПП
+    role: hyperlink
+    within: Уведомления
+    index: null
+  - name: подвал
+    role: hyperlink
+    within: Уведомления
+    index: null
+  - name: ссылка «Документ о предстоящей поставке» (регламентированная форма) / Отчеты
+    role: hyperlink
+    within: Уведомления
+    index: null
+  - name: 1С-Отчетность
+    role: hyperlink
+    within: Уведомления
+    index: null
+  - name: Уведомления
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Проверить
-  - Отправить
+  - name: Проверить
+    role: field
+    within: Уведомления
+    index: null
+  - name: Отправить
+    role: field
+    within: Уведомления
+    index: null
   fields: []
 - id: '10'
   title: Банк и касса → Платежные поручения → Создать
@@ -344,16 +524,43 @@ scenes:
   highlight: Рамка на поле «КБК»; плашка «Не ЕНП!»
   show_only: false
   clicks:
-  - Банк и касса
-  - Платежные поручения
-  - Создать
+  - name: Банк и касса
+    role: menu
+    within: ''
+    index: null
+  - name: Платежные поручения
+    role: hyperlink
+    within: ''
+    index: null
+  - name: Создать
+    role: button
+    within: Платежные поручения
+    index: null
   targets:
-  - Платежное поручение
-  - Вид операции
-  - Уплата налога
-  - Налог
-  - Обеспечительный платеж при ввозе товаров из ЕАЭС
-  - КБК
+  - name: Платежное поручение
+    role: field
+    within: Платежные поручения
+    index: null
+  - name: Вид операции
+    role: field
+    within: Платежные поручения
+    index: null
+  - name: Уплата налога
+    role: field
+    within: Платежные поручения
+    index: null
+  - name: Налог
+    role: field
+    within: Платежные поручения
+    index: null
+  - name: Обеспечительный платеж при ввозе товаров из ЕАЭС
+    role: field
+    within: Платежные поручения
+    index: null
+  - name: КБК
+    role: field
+    within: Платежные поручения
+    index: null
   fields: []
 - id: '11'
   title: Платежное поручение → «Создать на основании» → «Списание с расчетного счета»
@@ -368,12 +575,27 @@ scenes:
   highlight: Рамка на «Счет расчетов 68.91»
   show_only: false
   clicks:
-  - Платежное поручение
-  - Создать на основании
-  - Списание с расчетного счета
+  - name: Платежное поручение
+    role: hyperlink
+    within: Списание с расчетного счета
+    index: null
+  - name: Создать на основании
+    role: ''
+    within: Списание с расчетного счета
+    index: null
+  - name: Списание с расчетного счета
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Списание с расчетного счета
-  - Счет расчетов
+  - name: Списание с расчетного счета
+    role: field
+    within: ''
+    index: null
+  - name: Счет расчетов
+    role: field
+    within: Списание с расчетного счета
+    index: null
   fields: []
 - id: '12'
   title: Отчеты → 1С-Отчетность → Входящие → закладка «Требования и уведомления» (или ДОПП → «Этапы отправки»)
@@ -392,13 +614,31 @@ scenes:
   highlight: Рамка на статусе «Обеспечен»; стрелка на QR-коде
   show_only: false
   clicks:
-  - Отчеты
-  - 1С-Отчетность
-  - Входящие
-  - Требования и уведомления
-  - Этапы отправки
+  - name: Отчеты
+    role: menu
+    within: ''
+    index: null
+  - name: 1С-Отчетность
+    role: hyperlink
+    within: Этапы отправки
+    index: null
+  - name: Входящие
+    role: hyperlink
+    within: Этапы отправки
+    index: null
+  - name: Требования и уведомления
+    role: hyperlink
+    within: Этапы отправки
+    index: null
+  - name: Этапы отправки
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Обеспечен
+  - name: Обеспечен
+    role: field
+    within: Этапы отправки
+    index: null
   fields: []
 - id: '13'
   title: ДОПП → «Создать на основании» → «Поступление (акт, накладная, УПД)»
@@ -418,17 +658,47 @@ scenes:
   highlight: Рамка на сумме 900 000 и на зачете аванса
   show_only: false
   clicks:
-  - ДОПП
-  - Создать на основании
-  - Поступление (акт, накладная, УПД)
+  - name: ДОПП
+    role: hyperlink
+    within: Поступление (акт, накладная, УПД)
+    index: null
+  - name: Создать на основании
+    role: ''
+    within: Поступление (акт, накладная, УПД)
+    index: null
+  - name: Поступление (акт, накладная, УПД)
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Поступление (акт, накладная, УПД)
-  - Товары
-  - Дата
-  - Счет учета
-  - Счет расчетов
-  - Счет расчетов по авансам
-  - НДС
+  - name: Поступление (акт, накладная, УПД)
+    role: field
+    within: ''
+    index: null
+  - name: Товары
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    index: 0
+  - name: Дата
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    index: 0
+  - name: Счет учета
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    index: null
+  - name: Счет расчетов
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    index: null
+  - name: Счет расчетов по авансам
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    index: null
+  - name: НДС
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    index: 0
   fields: []
 - id: '14'
   title: Покупки → Поступление доп. расходов → Создать (или Поступление товаров → «Создать на основании»
@@ -453,17 +723,47 @@ scenes:
   highlight: Рамка на сумме 30 000; плашка «База НДС — только если доставка в цене контракта!»
   show_only: false
   clicks:
-  - Покупки
-  - Поступление доп. расходов
-  - Создать
-  - Создать на основании
-  - Поступление доп. расходов
+  - name: Покупки
+    role: menu
+    within: ''
+    index: null
+  - name: Поступление доп. расходов
+    role: hyperlink
+    within: ''
+    index: null
+  - name: Создать
+    role: button
+    within: Поступление доп. расходов
+    index: null
+  - name: Создать на основании
+    role: ''
+    within: Поступление доп. расходов
+    index: null
+  - name: Поступление доп. расходов
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Поступление доп. расходов
-  - Контрагент
-  - Сумма
-  - Способ распределения
-  - Товары
+  - name: Поступление доп. расходов
+    role: field
+    within: ''
+    index: null
+  - name: Контрагент
+    role: field
+    within: Поступление доп. расходов
+    index: 0
+  - name: Сумма
+    role: field
+    within: Поступление доп. расходов
+    index: 0
+  - name: Способ распределения
+    role: field
+    within: Поступление доп. расходов
+    index: null
+  - name: Товары
+    role: field
+    within: Поступление доп. расходов
+    index: 0
   fields: []
 - id: '15'
   title: 'Поступление → «Создать на основании» → «Заявление о ввозе товаров» (список: Покупки → Внешняя
@@ -486,18 +786,51 @@ scenes:
   highlight: Рамка на «Налоговая база» и «НДС»; плашка с вариантами А/Б
   show_only: false
   clicks:
-  - Поступление
-  - Создать на основании
-  - Заявление о ввозе товаров
-  - Внешняя торговля
-  - Заявления о ввозе товаров
+  - name: Поступление
+    role: hyperlink
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Создать на основании
+    role: ''
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Заявление о ввозе товаров
+    role: hyperlink
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Внешняя торговля
+    role: hyperlink
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Заявления о ввозе товаров
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Заявление о ввозе товаров
-  - Вид транспорта
-  - Курс
-  - Налоговая база
-  - Ставка НДС
-  - НДС
+  - name: Заявление о ввозе товаров
+    role: field
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Вид транспорта
+    role: field
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Курс
+    role: field
+    within: Заявления о ввозе товаров
+    index: 0
+  - name: Налоговая база
+    role: field
+    within: Заявления о ввозе товаров
+    index: null
+  - name: Ставка НДС
+    role: field
+    within: Заявления о ввозе товаров
+    index: null
+  - name: НДС
+    role: field
+    within: Заявления о ввозе товаров
+    index: 0
   fields: []
 - id: '16'
   title: Заявление о ввозе → «Печать» / кнопки «Выгрузить», «Отправка»
@@ -513,10 +846,19 @@ scenes:
   highlight: Стрелка на «Отправка» с плашкой «Не нажимаем»
   show_only: true
   clicks:
-  - Заявление о ввозе
-  - Печать
+  - name: Заявление о ввозе
+    role: hyperlink
+    within: Печать
+    index: null
+  - name: Печать
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Заявление о ввозе товаров и уплате косвенных налогов
+  - name: Заявление о ввозе товаров и уплате косвенных налогов
+    role: field
+    within: Печать
+    index: null
   fields: []
 - id: '17'
   title: Операции → Закрытие периода → Отражение ДОПП в декларации → Создать
@@ -538,13 +880,37 @@ scenes:
   highlight: Рамка на сумме разницы; плашка «Срок — не позднее 20.08.2026»
   show_only: false
   clicks:
-  - Операции
-  - Закрытие периода
-  - Отражение ДОПП в декларации
-  - Создать
+  - name: Операции
+    role: menu
+    within: ''
+    index: null
+  - name: Закрытие периода
+    role: hyperlink
+    within: Отражение ДОПП в декларации
+    index: null
+  - name: Отражение ДОПП в декларации
+    role: hyperlink
+    within: ''
+    index: null
+  - name: Создать
+    role: button
+    within: Отражение ДОПП в декларации
+    index: null
   targets:
-  - Отражение ДОПП в декларации
-  - Заполнить
-  - Провести
-  - Начисление налогов на единый налоговый счет
+  - name: Отражение ДОПП в декларации
+    role: field
+    within: ''
+    index: null
+  - name: Заполнить
+    role: button
+    within: Отражение ДОПП в декларации
+    index: null
+  - name: Провести
+    role: button
+    within: Отражение ДОПП в декларации
+    index: null
+  - name: Начисление налогов на единый налоговый счет
+    role: field
+    within: Отражение ДОПП в декларации
+    index: null
   fields: []

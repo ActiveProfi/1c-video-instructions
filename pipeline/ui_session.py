@@ -52,6 +52,87 @@ class Found:
     right: int = 240
     bottom: int = 120
     raw: object = None
+    role: str = ""
+    parents: tuple = ()
+    ambiguous: bool = False
+    note: str = ""
+
+
+ROLE_ALIASES = {
+    "menu": "menu",
+    "раздел": "menu",
+    "пункт": "menu",
+    "listitem": "menu",
+    "treeitem": "menu",
+    "menuitem": "menu",
+    "hyperlink": "hyperlink",
+    "ссылка": "hyperlink",
+    "гиперссылка": "hyperlink",
+    "field": "field",
+    "edit": "field",
+    "combobox": "field",
+    "поле": "field",
+    "button": "button",
+    "кнопка": "button",
+    "text": "text",
+    "надпись": "text",
+}
+
+
+def canonical_role(control_type: str) -> str:
+    value = norm(control_type).replace("controltype.", "")
+    if not value:
+        return ""
+    if value in ROLE_ALIASES:
+        return ROLE_ALIASES[value]
+    for alias, role in ROLE_ALIASES.items():
+        if alias in value:
+            return role
+    return "other"
+
+
+def choose_match(candidates: list[dict], name: str, role: str = "", within: str = "", index=None):
+    """Выбирает один элемент. Неоднозначная подпись не считается ошибкой."""
+    wanted = norm(name)
+    named = [item for item in candidates if norm(item.get("name") or "") == wanted or wanted in norm(item.get("name") or "")]
+    if not named:
+        raise LookupError(name)
+    exact = [item for item in named if norm(item.get("name") or "") == wanted]
+    pool = exact or named
+    notes = []
+    several = len(pool) > 1
+    if several:
+        notes.append(f"совпадений: {len(pool)}")
+    wanted_role = canonical_role(role) if role else ""
+    if wanted_role:
+        by_role = [item for item in pool if item.get("role") == wanted_role]
+        if by_role:
+            pool = by_role
+            notes.append(f"тип {wanted_role}")
+    if within:
+        parent_token = norm(within)
+        by_parent = [
+            item for item in pool
+            if any(parent_token in norm(parent) for parent in item.get("parents") or [])
+        ]
+        if by_parent:
+            pool = by_parent
+            notes.append(f"внутри «{within}»")
+    visible = [item for item in pool if item.get("visible", True)]
+    if visible:
+        pool = visible
+        if several:
+            notes.append("видимый в активном окне")
+    chosen = pool[0]
+    if index is not None:
+        try:
+            position = int(index)
+        except (TypeError, ValueError):
+            position = -1
+        if 0 <= position < len(pool):
+            chosen = pool[position]
+            notes.append(f"номер {position}")
+    return chosen, "; ".join(notes), several
 
 
 def guard_name(name: str) -> None:
@@ -65,9 +146,28 @@ def guard_name(name: str) -> None:
 class FakeSession:
     """Имитация окна для проверки без живой 1С."""
 
-    def __init__(self, names: list[str], values: dict | None = None, texts: list[str] | None = None, watcher: EscWatcher | None = None):
-        self.names = list(names)
+    def __init__(self, names: list, values: dict | None = None, texts: list[str] | None = None, watcher: EscWatcher | None = None):
         self.values = dict(values or {})
+        self.controls = []
+        for item in names:
+            if isinstance(item, dict):
+                title = item.get("name") or ""
+                self.controls.append({
+                    "name": title,
+                    "role": canonical_role(item.get("role") or item.get("control_type") or "menu"),
+                    "parents": list(item.get("parents") or ([item["parent"]] if item.get("parent") else [])),
+                    "visible": item.get("visible", True),
+                    "value": str(item.get("value", self.values.get(title, ""))),
+                })
+            else:
+                self.controls.append({
+                    "name": item,
+                    "role": "menu",
+                    "parents": [],
+                    "visible": True,
+                    "value": str(self.values.get(item, "")),
+                })
+        self.names = [item["name"] for item in self.controls]
         self.texts = list(texts or [])
         self.watcher = watcher or EscWatcher()
         self.clicks: list[str] = []
@@ -88,21 +188,26 @@ class FakeSession:
     def move_cursor(self, x: int, y: int) -> None:
         self.cursor = (x, y)
 
-    def find(self, name: str, timeout: float = 0.2) -> Found:
+    def find(self, name: str, timeout: float = 0.2, role: str = "", within: str = "", index=None) -> Found:
         self.watcher.poll()
         deadline = time.time() + timeout
         while True:
             self.watcher.poll()
-            found = [item for item in self.names if norm(item) == norm(name) or norm(name) in norm(item)]
-            exact = [item for item in found if norm(item) == norm(name)]
-            chosen = exact or found
-            if len(chosen) == 1:
-                title = chosen[0]
-                return Found(name=title, value=str(self.values.get(title, "")))
-            if len(chosen) > 1:
-                raise RuntimeError(
-                    f"Элемент «{name}» найден несколько раз ({len(chosen)}). "
-                    "Оставьте на экране одну такую подпись."
+            try:
+                chosen, note, several = choose_match(self.controls, name, role, within, index)
+            except LookupError:
+                chosen = None
+                note = ""
+                several = False
+            if chosen is not None:
+                title = chosen["name"]
+                return Found(
+                    name=title,
+                    value=str(chosen.get("value") or self.values.get(title, "")),
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=several,
+                    note=note,
                 )
             if time.time() >= deadline:
                 raise LookupError(name)
@@ -132,6 +237,8 @@ class PywinautoSession:
     def __init__(self, watcher: EscWatcher | None = None):
         self.watcher = watcher or EscWatcher()
         self.win = None
+        self._cache = None
+        self._cache_at = 0.0
 
     def connect(self) -> None:
         self.watcher.poll()
@@ -193,58 +300,102 @@ class PywinautoSession:
         except Exception:
             pass
 
-    def find(self, name: str, timeout: float = 8) -> Found:
+    def _snapshot(self) -> list[dict]:
+        if self._cache is not None and time.time() - self._cache_at < 1:
+            return self._cache
+        rows = []
+        try:
+            items = self.win.descendants()
+        except Exception:
+            items = []
+        for item in items:
+            self.watcher.poll()
+            try:
+                title = item.window_text() or ""
+            except Exception:
+                continue
+            if not title:
+                continue
+            control = ""
+            try:
+                control = str(item.element_info.control_type or "")
+            except Exception:
+                control = ""
+            visible = True
+            try:
+                visible = bool(item.is_visible())
+            except Exception:
+                visible = True
+            parents = []
+            parent = item
+            for _ in range(8):
+                try:
+                    parent = parent.parent()
+                except Exception:
+                    break
+                if parent is None:
+                    break
+                try:
+                    parent_name = parent.window_text() or ""
+                except Exception:
+                    parent_name = ""
+                if parent_name:
+                    parents.append(parent_name)
+            try:
+                rect = item.rectangle()
+                box = (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
+            except Exception:
+                box = (40, 80, 240, 120)
+            rows.append({
+                "name": title,
+                "role": canonical_role(control),
+                "parents": parents,
+                "visible": visible,
+                "box": box,
+                "raw": item,
+            })
+        self._cache = rows
+        self._cache_at = time.time()
+        return rows
+
+    def find(self, name: str, timeout: float = 8, role: str = "", within: str = "", index=None) -> Found:
         deadline = time.time() + timeout
-        duplicates = 0
         while True:
             self.watcher.poll()
-            matches = []
             try:
-                items = self.win.descendants()
-            except Exception:
-                items = []
-            for item in items:
-                try:
-                    title = item.window_text() or ""
-                except Exception:
-                    continue
-                if not title:
-                    continue
-                if norm(title) == norm(name) or norm(name) in norm(title):
-                    matches.append(item)
-            exact = [item for item in matches if norm(item.window_text() or "") == norm(name)]
-            chosen = exact or matches
-            if len(chosen) == 1:
-                item = chosen[0]
-                rect = item.rectangle()
+                chosen, note, several = choose_match(self._snapshot(), name, role, within, index)
+            except LookupError:
+                chosen = None
+            if chosen is not None:
+                left, top, right, bottom = chosen["box"]
                 return Found(
-                    name=item.window_text() or name,
-                    value="",
-                    left=int(rect.left),
-                    top=int(rect.top),
-                    right=int(rect.right),
-                    bottom=int(rect.bottom),
-                    raw=item,
+                    name=chosen["name"],
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                    raw=chosen["raw"],
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=several,
+                    note=note,
                 )
-            duplicates = len(chosen)
             if time.time() >= deadline:
-                break
+                raise LookupError(name)
+            self._cache = None
             time.sleep(0.45)
-        if duplicates > 1:
-            raise RuntimeError(
-                f"Элемент «{name}» найден несколько раз. Закройте лишние окна и оставьте одну такую подпись."
-            )
-        raise LookupError(name)
 
     def click(self, element: Found) -> None:
         self.watcher.poll()
         guard_name(element.name)
+        self._cache = None
         self.move_cursor((element.left + element.right) // 2, (element.top + element.bottom) // 2)
         element.raw.click_input()
 
     def set_text(self, element: Found, value: str) -> None:
         self.watcher.poll()
         guard_name(element.name)
+        self._cache = None
         try:
             element.raw.set_edit_text(value)
         except Exception:

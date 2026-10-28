@@ -164,44 +164,54 @@ def _kind_label(kind: str) -> str:
     }.get(kind, kind)
 
 
-def dry_run(session, lesson: dict, timeout: float = 2) -> dict:
+def dry_run(session, lesson: dict, timeout: float = 0.8) -> dict:
     """Ищет подписи. Не проводит, не заполняет и не пишет видео."""
     session.connect()
     rows = []
     for scene in lesson["scenes"]:
         for action in action_plan(scene):
+            row = {
+                "step": scene["id"],
+                "element": action["name"],
+                "kind": action["kind"],
+                "role": action.get("role") or "",
+                "within": action.get("within") or "",
+                "index": action.get("index"),
+                "found": False,
+                "ambiguous": False,
+                "note": "",
+                "performed": "только поиск",
+                "would": _kind_label(action["kind"]),
+                "narration": scene["narration"],
+                "legal_note": scene["legal_note"],
+            }
             try:
-                element = session.find(action["name"], timeout=timeout)
-                rows.append(
-                    {
-                        "step": scene["id"],
-                        "element": action["name"],
-                        "kind": action["kind"],
-                        "found": True,
-                        "performed": "только поиск",
-                        "would": _kind_label(action["kind"]),
-                        "narration": scene["narration"],
-                        "legal_note": scene["legal_note"],
-                    }
+                element = session.find(
+                    action["name"],
+                    timeout=timeout,
+                    role=action.get("role") or "",
+                    within=action.get("within") or "",
+                    index=action.get("index"),
                 )
-                del element
-            except LookupError:
-                rows.append(
-                    {
-                        "step": scene["id"],
-                        "element": action["name"],
-                        "kind": action["kind"],
-                        "found": False,
-                        "performed": "только поиск",
-                        "would": _kind_label(action["kind"]),
-                        "narration": scene["narration"],
-                        "legal_note": scene["legal_note"],
-                    }
-                )
+                row["found"] = True
+                row["ambiguous"] = bool(getattr(element, "ambiguous", False))
+                row["note"] = getattr(element, "note", "") or ""
+                if row["ambiguous"]:
+                    row["note"] = (row["note"] + "; выбран один видимый элемент").strip("; ")
             except StopRequested:
                 raise
+            except Exception as error:
+                row["found"] = False
+                row["note"] = str(error) or "не найден"
+            rows.append(row)
     found = [row["element"] for row in rows if row["found"]]
     missing = [row["element"] for row in rows if not row["found"]]
+    seen = False
+    try:
+        seen = bool(session.organization_visible(lesson["organization"]))
+    except Exception as error:
+        seen = False
+        missing.append(f"организация: {error}")
     return {
         "status": "checked",
         "mode": "dry-run",
@@ -209,15 +219,27 @@ def dry_run(session, lesson: dict, timeout: float = 2) -> dict:
         "posted": False,
         "filled": False,
         "organization": lesson["organization"],
-        "organization_seen": session.organization_visible(lesson["organization"]),
+        "organization_seen": seen,
         "found": found,
         "missing": missing,
         "steps": rows,
     }
 
 
+def _needs_smartphone(lesson: dict) -> bool:
+    import json as _json
+
+    return "смартфон" in _json.dumps(lesson, ensure_ascii=False).lower()
+
+
 def _perform(session, overlay: Overlay, action: dict, scene: dict) -> None:
-    element = session.find(action["name"], timeout=8)
+    element = session.find(
+        action["name"],
+        timeout=8,
+        role=action.get("role") or "",
+        within=action.get("within") or "",
+        index=action.get("index"),
+    )
     caption = action["name"]
     subtitle = scene["narration"]
     if scene.get("legal_note"):
@@ -248,6 +270,19 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
                 "Откройте учебную базу и не переключайтесь на рабочую."
             )
         grab.start(session.window_rect(), out_dir / "raw-screen.mp4")
+        if _needs_smartphone(lesson):
+            from pipeline.tnved import ensure_smartphone
+
+            created = ensure_smartphone(session)
+            speech = out_dir / "voice" / "smartphone.wav"
+            speak_clip(created["message"], speech, tts_name, voice, project_root)
+            cues.append({
+                "step": "smartphone",
+                "start": round(time.time() - started, 3),
+                "narration": created["message"],
+                "legal_note": "Код ТН ВЭД 8517 13 000 0 нужен для ставки сбора 73 860 ₽ по ПП РФ № 1637.",
+                "wav": str(speech),
+            })
         for scene in lesson["scenes"]:
             if watcher:
                 watcher.poll()
@@ -412,13 +447,30 @@ def open_session(backend: str, watcher: EscWatcher):
 
 
 def run_dry(lesson_path: Path, out_dir: Path, session=None) -> dict:
-    lesson = load_lesson(lesson_path)
-    session = session or PywinautoSession(EscWatcher())
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report = {
+        "status": "failed",
+        "mode": "dry-run",
+        "recorded": False,
+        "posted": False,
+        "filled": False,
+        "found": [],
+        "missing": [],
+        "steps": [],
+        "error": None,
+    }
     try:
+        lesson = load_lesson(lesson_path)
+        session = session or PywinautoSession(EscWatcher())
         report = dry_run(session, lesson)
     except StopRequested as error:
-        report = {"status": "stopped", "recorded": False, "posted": False, "message": str(error)}
-    dump_json(out_dir / "dry-run.json", report)
+        report["status"] = "stopped"
+        report["error"] = str(error)
+    except Exception as error:
+        report["status"] = "failed"
+        report["error"] = str(error)
+    finally:
+        dump_json(out_dir / "dry-run.json", report)
     return report
 
 

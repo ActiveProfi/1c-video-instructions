@@ -34,15 +34,86 @@ def assess_tnved(code: str) -> dict:
     }
 
 
-def read_smartphone_tnved(session) -> str:
-    """Открывает справочник и карточку. Ничего не проводит и не удаляет."""
-    for name in ("Справочники", "Номенклатура"):
-        element = session.find(name, timeout=8)
-        session.click(element)
-    item = session.find("Смартфон", timeout=8)
+NOT_FOUND_MESSAGE = "Номенклатура Смартфон не найдена, будет создана в уроке"
+ITEM_NAME = "Смартфон"
+
+
+def open_nomenclature(session) -> None:
+    """Справочники → Номенклатура. Список только открывается."""
+    try:
+        section = session.find("Справочники", timeout=8, role="menu")
+        session.click(section)
+        link = session.find("Номенклатура", timeout=8, role="hyperlink", within="Справочники")
+        session.click(link)
+    except LookupError as error:
+        raise RuntimeError(
+            f"Не удалось открыть Справочники → Номенклатура: на экране нет «{error}». "
+            "Оставьте главное окно 1С открытым."
+        ) from None
+
+
+def search_list(session, query: str) -> bool:
+    for field_name in ("Поиск", "Найти", "Строка поиска"):
+        try:
+            box = session.find(field_name, timeout=1.5, role="field", within="Номенклатура")
+        except LookupError:
+            continue
+        session.set_text(box, query)
+        return True
+    return False
+
+
+def find_list_item(session, title: str, timeout: float = 3):
+    search_list(session, title)
+    try:
+        return session.find(title, timeout=timeout, within="Номенклатура")
+    except LookupError:
+        return None
+
+
+def read_smartphone_tnved(session):
+    """Открывает справочник и ищет карточку. Ничего не проводит и не удаляет.
+
+    Если позиции нет, возвращает None.
+    """
+    open_nomenclature(session)
+    item = find_list_item(session, ITEM_NAME)
+    if item is None:
+        return None
     session.click(item)
-    field = session.find("ТН ВЭД", timeout=8)
+    field = session.find("ТН ВЭД", timeout=6, role="field")
     return session.read(field).strip()
+
+
+def ensure_smartphone(session) -> dict:
+    """С главного окна создаёт номенклатуру, только если её ещё нет."""
+    open_nomenclature(session)
+    if find_list_item(session, ITEM_NAME) is not None:
+        return {"created": False, "found": True, "message": "Номенклатура Смартфон уже есть в справочнике."}
+    button = session.find("Создать", timeout=6, role="button", within="Номенклатура")
+    session.click(button)
+    name = session.find("Наименование", timeout=6, role="field")
+    session.set_text(name, ITEM_NAME)
+    code = session.find("ТН ВЭД", timeout=6, role="field")
+    session.set_text(code, EXPECTED_CODE)
+    saved = False
+    for save_name in ("Записать и закрыть", "Записать"):
+        try:
+            save = session.find(save_name, timeout=2, role="button")
+        except LookupError:
+            continue
+        session.click(save)
+        saved = True
+        break
+    if not saved:
+        raise RuntimeError(
+            "Карточка «Смартфон» заполнена, но кнопка «Записать» не найдена. Ничего не удалялось."
+        )
+    return {
+        "created": True,
+        "found": False,
+        "message": f"Номенклатура Смартфон создана, код ТН ВЭД {EXPECTED_CODE}.",
+    }
 
 
 def write_report(path: Path, payload: dict) -> None:

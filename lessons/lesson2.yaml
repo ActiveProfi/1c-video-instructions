@@ -117,12 +117,27 @@ scenes:
   highlight: Рамка на «Страна регистрации» и «Валюта»; стрелка на «Код ТН ВЭД» в карточке номенклатуры
   show_only: false
   clicks:
-  - Справочники
-  - Контрагенты
+  - name: Справочники
+    role: menu
+    within: ''
+    index: null
+  - name: Контрагенты
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - С поставщиком
-  - Таможня
-  - Прочее
+  - name: С поставщиком
+    role: field
+    within: Контрагенты
+    index: null
+  - name: Таможня
+    role: field
+    within: Контрагенты
+    index: null
+  - name: Прочее
+    role: field
+    within: Контрагенты
+    index: null
   fields: []
 - id: '2'
   title: Покупки → Поступление (акты, накладные, УПД) → «Поступление» → «Товары»
@@ -140,18 +155,51 @@ scenes:
   highlight: Рамка на сумме 120 000 и счете 60.21
   show_only: false
   clicks:
-  - Покупки
-  - Поступление (акты, накладные, УПД
-  - Поступление
-  - Товары
+  - name: Покупки
+    role: menu
+    within: ''
+    index: null
+  - name: Поступление (акты, накладные, УПД
+    role: hyperlink
+    within: Товары
+    index: null
+  - name: Поступление
+    role: hyperlink
+    within: Товары
+    index: null
+  - name: Товары
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Поступление (акт, накладная, УПД)
-  - Дата
-  - Контрагент
-  - Договор
-  - Счет учета
-  - Счет расчетов
-  - '% НДС'
+  - name: Поступление (акт, накладная, УПД)
+    role: field
+    within: Товары
+    index: null
+  - name: Дата
+    role: field
+    within: Товары
+    index: 0
+  - name: Контрагент
+    role: field
+    within: Товары
+    index: 0
+  - name: Договор
+    role: field
+    within: Товары
+    index: 0
+  - name: Счет учета
+    role: field
+    within: Товары
+    index: null
+  - name: Счет расчетов
+    role: field
+    within: Товары
+    index: null
+  - name: '% НДС'
+    role: field
+    within: Товары
+    index: null
   fields: []
 - id: '3'
   title: Покупки → Поступление доп. расходов → Создать (или Поступление → «Создать на основании» → «Поступление
@@ -171,15 +219,39 @@ scenes:
   highlight: Рамка на сумме 50 000
   show_only: false
   clicks:
-  - Покупки
-  - Поступление доп. расходов
-  - Создать
-  - Создать на основании
-  - Поступление доп. расходов
+  - name: Покупки
+    role: menu
+    within: ''
+    index: null
+  - name: Поступление доп. расходов
+    role: hyperlink
+    within: ''
+    index: null
+  - name: Создать
+    role: button
+    within: Поступление доп. расходов
+    index: null
+  - name: Создать на основании
+    role: ''
+    within: Поступление доп. расходов
+    index: null
+  - name: Поступление доп. расходов
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Поступление доп. расходов
-  - Контрагент
-  - Сумма
+  - name: Поступление доп. расходов
+    role: field
+    within: ''
+    index: null
+  - name: Контрагент
+    role: field
+    within: Поступление доп. расходов
+    index: 0
+  - name: Сумма
+    role: field
+    within: Поступление доп. расходов
+    index: 0
   fields: []
 - id: '4'
   title: Банк и касса → Банковские выписки → Списание
@@ -198,12 +270,27 @@ scenes:
   highlight: Стрелка на счет 76.09
   show_only: false
   clicks:
-  - Банк и касса
-  - Банковские выписки
-  - Списание
+  - name: Банк и касса
+    role: menu
+    within: ''
+    index: null
+  - name: Банковские выписки
+    role: hyperlink
+    within: Списание
+    index: null
+  - name: Списание
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Списание с расчетного счета
-  - Прочие расчеты с контрагентами
+  - name: Списание с расчетного счета
+    role: field
+    within: Списание
+    index: null
+  - name: Прочие расчеты с контрагентами
+    role: field
+    within: Списание
+    index: null
   fields: []
 - id: '5'
   title: Покупки → Внешняя торговля → ГТД по импорту → Создать (или Поступление → «Создать на основании»
@@ -230,20 +317,59 @@ scenes:
   highlight: Рамка на поле «Таможенный сбор»
   show_only: false
   clicks:
-  - Покупки
-  - Внешняя торговля
-  - ГТД по импорту
-  - Создать
-  - Создать на основании
-  - ГТД по импорту
+  - name: Покупки
+    role: menu
+    within: ''
+    index: null
+  - name: Внешняя торговля
+    role: hyperlink
+    within: ГТД по импорту
+    index: null
+  - name: ГТД по импорту
+    role: hyperlink
+    within: ''
+    index: null
+  - name: Создать
+    role: button
+    within: ГТД по импорту
+    index: null
+  - name: Создать на основании
+    role: ''
+    within: ГТД по импорту
+    index: null
+  - name: ГТД по импорту
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - ГТД по импорту
-  - Главное
-  - Таможня
-  - Договор
-  - Номер декларации
-  - Таможенный сбор
-  - Счет учета расчетов
+  - name: ГТД по импорту
+    role: field
+    within: ''
+    index: null
+  - name: Главное
+    role: menu
+    within: ''
+    index: null
+  - name: Таможня
+    role: field
+    within: ГТД по импорту
+    index: null
+  - name: Договор
+    role: field
+    within: ГТД по импорту
+    index: 0
+  - name: Номер декларации
+    role: field
+    within: ГТД по импорту
+    index: null
+  - name: Таможенный сбор
+    role: field
+    within: ГТД по импорту
+    index: null
+  - name: Счет учета расчетов
+    role: field
+    within: ГТД по импорту
+    index: null
   fields: []
 - id: '6'
   title: ГТД по импорту → закладка «Разделы ДТ»
@@ -263,15 +389,39 @@ scenes:
   highlight: Рамка на «Таможенная стоимость» 170 000; стрелка на «Сумма НДС» 39 270
   show_only: false
   clicks:
-  - ГТД по импорту
-  - Разделы ДТ
+  - name: ГТД по импорту
+    role: hyperlink
+    within: Разделы ДТ
+    index: null
+  - name: Разделы ДТ
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Таможенная стоимость
-  - Ставка пошлины
-  - Сумма пошлины
-  - Ставка НДС
-  - Сумма НДС
-  - Товары
+  - name: Таможенная стоимость
+    role: field
+    within: Разделы ДТ
+    index: null
+  - name: Ставка пошлины
+    role: field
+    within: Разделы ДТ
+    index: null
+  - name: Сумма пошлины
+    role: field
+    within: Разделы ДТ
+    index: null
+  - name: Ставка НДС
+    role: field
+    within: Разделы ДТ
+    index: null
+  - name: Сумма НДС
+    role: field
+    within: Разделы ДТ
+    index: null
+  - name: Товары
+    role: field
+    within: Разделы ДТ
+    index: 0
   fields: []
 - id: '7'
   title: ГТД по импорту → «Провести» → «Показать проводки (Дт/Кт)»
@@ -290,11 +440,23 @@ scenes:
   highlight: Рамки на проводках 41.01 и 19.05
   show_only: false
   clicks:
-  - ГТД по импорту
-  - Провести
-  - Показать проводки (Дт/Кт)
+  - name: ГТД по импорту
+    role: hyperlink
+    within: Показать проводки (Дт/Кт)
+    index: null
+  - name: Провести
+    role: button
+    within: Показать проводки (Дт/Кт)
+    index: null
+  - name: Показать проводки (Дт/Кт)
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Движения документа
+  - name: Движения документа
+    role: field
+    within: Показать проводки (Дт/Кт)
+    index: null
   fields: []
 - id: '8'
   title: Операции → Закрытие месяца → июнь 2026 → «Выполнить закрытие месяца» → операция «Переоценка валютных
@@ -315,15 +477,39 @@ scenes:
   highlight: Рамка на сумме 5 000 в справке-расчете
   show_only: false
   clicks:
-  - Операции
-  - Закрытие месяца
-  - июнь 2026
-  - Выполнить закрытие месяца
-  - операция «Переоценка валютных средств»
-  - Справка-расчет
+  - name: Операции
+    role: menu
+    within: ''
+    index: null
+  - name: Закрытие месяца
+    role: hyperlink
+    within: Справка-расчет
+    index: null
+  - name: июнь 2026
+    role: hyperlink
+    within: Справка-расчет
+    index: null
+  - name: Выполнить закрытие месяца
+    role: hyperlink
+    within: Справка-расчет
+    index: null
+  - name: операция «Переоценка валютных средств»
+    role: hyperlink
+    within: Справка-расчет
+    index: null
+  - name: Справка-расчет
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Закрытие месяца
-  - Переоценка валютных средств
+  - name: Закрытие месяца
+    role: field
+    within: Справка-расчет
+    index: null
+  - name: Переоценка валютных средств
+    role: field
+    within: Справка-расчет
+    index: null
   fields: []
 - id: '9'
   title: Банк и касса → Банковские выписки → Списание (валютный счет CNY)
@@ -340,12 +526,27 @@ scenes:
   highlight: Рамка на курсовой разнице 3 000
   show_only: false
   clicks:
-  - Банк и касса
-  - Банковские выписки
-  - Списание (валютный счет CNY
+  - name: Банк и касса
+    role: menu
+    within: ''
+    index: null
+  - name: Банковские выписки
+    role: hyperlink
+    within: Списание (валютный счет CNY
+    index: null
+  - name: Списание (валютный счет CNY
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Списание с расчетного счета
-  - Оплата поставщику
+  - name: Списание с расчетного счета
+    role: field
+    within: Списание (валютный счет CNY
+    index: null
+  - name: Оплата поставщику
+    role: field
+    within: Списание (валютный счет CNY
+    index: null
   fields: []
 - id: '10'
   title: Банк и касса → Банковские выписки → Списание (рублевый счет)
@@ -360,13 +561,31 @@ scenes:
   highlight: Стрелка на статью расходов
   show_only: false
   clicks:
-  - Банк и касса
-  - Банковские выписки
-  - Списание (рублевый счет
+  - name: Банк и касса
+    role: menu
+    within: ''
+    index: null
+  - name: Банковские выписки
+    role: hyperlink
+    within: Списание (рублевый счет
+    index: null
+  - name: Списание (рублевый счет
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Списание с расчетного счета
-  - Комиссия банка
-  - Прочее списание
+  - name: Списание с расчетного счета
+    role: field
+    within: Списание (рублевый счет
+    index: null
+  - name: Комиссия банка
+    role: field
+    within: Списание (рублевый счет
+    index: null
+  - name: Прочее списание
+    role: field
+    within: Списание (рублевый счет
+    index: null
   fields: []
 - id: '11'
   title: Отчеты → Оборотно-сальдовая ведомость по счету → 60.21 и 76.09
@@ -383,10 +602,25 @@ scenes:
   highlight: Рамка на конечном сальдо
   show_only: false
   clicks:
-  - Отчеты
-  - Оборотно-сальдовая ведомость по счету
-  - 60.21 и 76.09
+  - name: Отчеты
+    role: menu
+    within: ''
+    index: null
+  - name: Оборотно-сальдовая ведомость по счету
+    role: hyperlink
+    within: 60.21 и 76.09
+    index: null
+  - name: 60.21 и 76.09
+    role: hyperlink
+    within: ''
+    index: null
   targets:
-  - Оборотно-сальдовая ведомость по счету
-  - Сформировать
+  - name: Оборотно-сальдовая ведомость по счету
+    role: field
+    within: 60.21 и 76.09
+    index: null
+  - name: Сформировать
+    role: field
+    within: 60.21 и 76.09
+    index: null
   fields: []

@@ -11,6 +11,16 @@ from pipeline.planner import UnsafeStep
 
 ARROW = re.compile(r"\s*(?:→|->)\s*")
 MUTATING_PARTS = ("создать", "провести", "записать", "заполнить", "распредел", "сохранить")
+SECTIONS = {
+    "главное", "руководителю", "банк и касса", "продажи", "покупки", "склад",
+    "производство", "ос и нма", "зарплата и кадры", "операции", "отчеты",
+    "справочники", "администрирование", "помощь", "главное меню",
+}
+AMBIGUOUS_FIELDS = {
+    "ндс", "дата", "сумма", "номер", "количество", "ставка", "курс",
+    "контрагент", "договор", "номенклатура", "товары", "период",
+    "организация", "наименование", "код тн вэд",
+}
 
 
 def norm(text: str) -> str:
@@ -142,41 +152,92 @@ def load_lesson(path: Path) -> dict:
     raise ValueError(f"Неизвестный формат урока: {path}")
 
 
+def _locator_name(item) -> str:
+    if isinstance(item, dict):
+        return str(item.get("name") or "")
+    return str(item)
+
+
+def form_context(scene: dict) -> str:
+    names = []
+    for item in scene.get("clicks") or []:
+        name = _locator_name(item)
+        if not name or norm(name) in SECTIONS or is_mutating_name(name) or is_forbidden_name(name):
+            continue
+        names.append(name)
+    return names[-1] if names else ""
+
+
+def locator_for(item, kind: str, scene: dict) -> dict:
+    """Подсказка для повторяющихся подписей: тип элемента, родитель, номер."""
+    if isinstance(item, dict):
+        name = str(item.get("name") or "")
+        role = str(item.get("role") or item.get("control_type") or "")
+        within = str(item.get("within") or item.get("parent") or "")
+        index = item.get("index")
+    else:
+        name, role, within, index = str(item), "", "", None
+    key = norm(name)
+    if not role:
+        if key in SECTIONS or kind == "navigate" and key in SECTIONS:
+            role = "menu"
+        elif kind == "navigate":
+            role = "hyperlink"
+        elif key in ("создать", "провести", "записать", "записать и закрыть", "заполнить", "добавить"):
+            role = "button"
+        elif kind in ("show", "fill") or key in AMBIGUOUS_FIELDS:
+            role = "field"
+    if not within and role != "menu":
+        within = form_context(scene)
+        if norm(within) == key:
+            within = ""
+    if index is None and key in AMBIGUOUS_FIELDS and role == "field":
+        index = 0
+    return {"name": name, "role": role, "within": within, "index": index}
+
+
 def action_plan(scene: dict) -> list[dict]:
     """Что делать на экране. Удаление и отправка в этом списке не нажимаются."""
     actions = []
     show_only = bool(scene.get("show_only"))
     action_text = norm(scene.get("action_text") or "")
 
-    def add(kind: str, name: str, value: str | None = None) -> None:
+    def add(kind: str, item, value: str | None = None) -> None:
+        hint = locator_for(item, kind, scene)
+        name = hint["name"]
+        payload = {"kind": kind, "scene_id": scene["id"], "value": value, **hint}
         if is_forbidden_name(name):
             if show_only or kind == "show":
-                actions.append({"kind": "show", "name": name, "value": None, "scene_id": scene["id"]})
+                payload["kind"] = "show"
+                actions.append(payload)
                 return
             raise UnsafeStep(
                 f"Шаг {scene['id']}: «{name}» похоже на отправку, выгрузку или удаление. "
                 "Такие кнопки учебный проход не нажимает."
             )
         if show_only and is_mutating_name(name):
-            actions.append({"kind": "show", "name": name, "value": None, "scene_id": scene["id"]})
+            payload["kind"] = "show"
+            actions.append(payload)
             return
-        actions.append({"kind": kind, "name": name, "value": value, "scene_id": scene["id"]})
+        actions.append(payload)
 
-    for name in scene.get("clicks") or []:
+    for item in scene.get("clicks") or []:
+        name = _locator_name(item)
         if is_mutating_name(name):
-            add("mutate", name)
+            add("mutate", item)
         else:
-            add("navigate", name)
+            add("navigate", item)
     if not show_only and "создать" in action_text and not any(norm(item["name"]) == "создать" for item in actions):
         add("mutate", "Создать")
     if not show_only and "провести" in action_text and not any("провест" in norm(item["name"]) for item in actions):
         add("mutate", "Провести")
-    for name in scene.get("targets") or []:
-        if any(norm(item["name"]) == norm(name) for item in actions):
+    for item in scene.get("targets") or []:
+        name = _locator_name(item)
+        if any(norm(step["name"]) == norm(name) for step in actions):
             continue
-        add("show", name)
+        add("show", item)
     for field in scene.get("fields") or []:
-        add("fill", field.get("name") or "", field.get("value"))
+        add("fill", field.get("name") or field, field.get("value") if isinstance(field, dict) else None)
     if not actions:
         raise UnsafeStep(f"У шага {scene['id']} нет действий на экране.")
     return actions
