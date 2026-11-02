@@ -238,11 +238,26 @@ def _perform(session, overlay: Overlay, action: dict, scene: dict) -> None:
     overlay.show(element, caption, subtitle)
     session.move_cursor((element.left + element.right) // 2, (element.top + element.bottom) // 2)
     if action["kind"] == "show":
-        return
+        return element
     if action["kind"] == "fill":
         session.set_text(element, action.get("value") or "")
-        return
+        return element
     session.click(element)
+    return element
+
+
+def _action_record(session, action: dict, element, start: float, end: float) -> dict:
+    """Действие для монтажа с якорями: время и рамка элемента (UI Automation) в координатах записи."""
+    record = {"label": action.get("name") or action.get("kind") or "", "caption": action.get("caption") or action.get("name") or "",
+              "start": round(start, 3), "end": round(end, 3)}
+    try:
+        left, top, _right, _bottom = session.window_rect()
+        rect = [int(element.left) - left, int(element.top) - top, int(element.right) - left, int(element.bottom) - top]
+        if rect[2] > rect[0] and rect[3] > rect[1]:
+            record["rect"] = rect
+    except Exception:  # noqa: BLE001 - без рамки урок всё равно собирается
+        pass
+    return record
 
 
 def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_name: str, voice: str, overlay: Overlay | None = None, grab: ScreenGrab | None = None) -> dict:
@@ -289,18 +304,21 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
                     "narration": scene["narration"],
                     "legal_note": scene["legal_note"],
                     "wav": str(speech),
+                    "title": scene.get("title") or "",
+                    "actions": [],
                 }
             )
             for action in action_plan(scene):
                 if watcher:
                     watcher.poll()
                 try:
+                    action_start = time.time() - started
                     try:
-                        _perform(session, overlay, action, scene)
+                        element = _perform(session, overlay, action, scene)
                     except LookupError:
                         if action["kind"] == "navigate" and hasattr(session, "global_search"):
                             session.global_search(action["name"])
-                            _perform(session, overlay, action, scene)
+                            element = _perform(session, overlay, action, scene)
                         else:
                             raise
                 except LookupError as error:
@@ -308,6 +326,8 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
                         f"Шаг {scene['id']}: не найден элемент «{error}». "
                         "Откройте нужный раздел. Точную подпись можно взять из пробного прогона."
                     ) from None
+                if element is not None:
+                    cues[-1]["actions"].append(_action_record(session, action, element, action_start, time.time() - started))
                 time.sleep(0.15)
             cues[-1]["end"] = round(time.time() - started, 3)
     except Exception:
@@ -355,6 +375,14 @@ def _finish_movie(lesson, cues, raw: Path, out_dir: Path, project_root: Path, tt
     _card_clip(lesson["card_title"], lesson["configuration"], "Учебная база. Отправки в ФНС нет.", intro_wav, intro)
     _card_clip(lesson["card_title"], lesson["configuration"], "Конец урока", outro_wav, outro)
     final = out_dir / "lesson.mp4"
+    if cues and all(cue.get("actions") for cue in cues):
+        try:
+            from pipeline.anchored import edit_anchored, steps_from_live_cues
+
+            report = edit_anchored(raw, steps_from_live_cues(cues), out_dir, intro=intro, outro=outro, annotate=lesson.get("annotations", True))
+            return final, report
+        except Exception as error:  # noqa: BLE001 - дальше прежний монтаж
+            print(f"Монтаж с якорями не удался ({type(error).__name__}: {str(error)[:300]}). Пробую прежний.", flush=True)
     try:
         from pipeline.continuous import edit_continuous, probe_video, steps_from_cues
 
@@ -518,8 +546,9 @@ def run_dry(lesson_path: Path, out_dir: Path, session=None) -> dict:
     return report
 
 
-def run_record(lesson_path: Path, out_dir: Path, project_root: Path, tts_name: str, voice: str, session=None, overlay=None, grab=None) -> dict:
+def run_record(lesson_path: Path, out_dir: Path, project_root: Path, tts_name: str, voice: str, session=None, overlay=None, grab=None, annotations: bool = True) -> dict:
     lesson = load_lesson(lesson_path)
+    lesson["annotations"] = annotations
     session = session or PywinautoSession(EscWatcher())
     try:
         result = record_lesson(session, lesson, out_dir, project_root, tts_name, voice, overlay, grab)
