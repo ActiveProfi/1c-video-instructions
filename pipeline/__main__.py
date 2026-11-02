@@ -52,7 +52,7 @@ def _live(root: Path, args) -> int:
         out,
         root,
         args.tts or "auto",
-        args.voice or "ru-RU-DmitryNeural",
+        args.voice or "fr-FR-RemyMultilingualNeural",
     )
     if result.get("status") != "recorded":
         print(result.get("message") or "Запись не завершена.", flush=True)
@@ -143,11 +143,41 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _edit(root: Path, args) -> int:
+    """Монтаж из готовой непрерывной записи. 1С не нужна и не открывается."""
+    from pipeline.continuous import edit_continuous, load_journal
+
+    if not args.journal:
+        print("Укажите журнал: --journal artifacts\\...\\edit-journal.json", flush=True)
+        return 1
+    journal = Path(args.journal)
+    if not journal.is_absolute():
+        journal = root / journal
+    raw, steps, data = load_journal(journal)
+    out = Path(args.out) if args.out else journal.parent / "continuous-edit"
+    if not out.is_absolute():
+        out = root / out
+    intro = data.get("intro_clip")
+    outro = data.get("outro_clip")
+    report = edit_continuous(
+        raw,
+        steps,
+        out,
+        intro=(journal.parent / intro) if intro else None,
+        outro=(journal.parent / outro) if outro else None,
+        max_speed=args.max_speed,
+        freeze_noise=args.freeze_noise,
+    )
+    print(f"Готово: {report['video']}", flush=True)
+    print(f"Длительность {report['duration_seconds']} с, вырезано пауз {report['removed_seconds']} с.", flush=True)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Собрать видеоурок по 1С: сценарий, шаги, запись и монтаж."
     )
-    parser.add_argument("command", nargs="?", default="run", choices=["run", "live", "tnved", "dump-ui"])
+    parser.add_argument("command", nargs="?", default="run", choices=["run", "live", "tnved", "dump-ui", "edit"])
     parser.add_argument("--lesson", default=None, help="Файл урока YAML, например lessons/lesson1.yaml")
     parser.add_argument("--request", default=None, help="JSON с темой и конфигурацией")
     parser.add_argument("--topic", default=None, help="Тема урока, если её нет в запросе")
@@ -165,6 +195,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Подтверждение, что открыта учебная копия базы, не рабочая",
     )
     parser.add_argument("--dry-run", action="store_true", help="Найти элементы 1С и снять кадры, ничего не нажимая")
+    parser.add_argument("--journal", default=None, help="edit: edit-journal.json с отметками шагов и озвучкой")
+    parser.add_argument("--tts-chain", default=None, help="Порядок озвучки при сбое, например edge,elevenlabs,offline")
+    parser.add_argument("--max-speed", type=float, default=2.0, help="edit: наибольшее ускорение действий")
+    parser.add_argument("--freeze-noise", type=float, default=0.0005, help="edit: порог freezedetect, меньше — чувствительнее")
     parser.add_argument("--process-id", type=int, default=0, help="PID окна 1С, если их несколько")
     args = parser.parse_args(argv)
 
@@ -174,6 +208,12 @@ def main(argv: list[str] | None = None) -> int:
             return _live(root, args)
         if args.command == "tnved":
             return _tnved(root, args)
+        if args.tts_chain:
+            import os
+
+            os.environ["LESSON_TTS_CHAIN"] = args.tts_chain
+        if args.command == "edit":
+            return _edit(root, args)
         if args.command == "dump-ui":
             return _dump_ui(root, args)
     except Exception as error:
@@ -192,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         request["materials"] = list(args.materials)
     driver = args.driver or request.get("driver") or "mock"
     tts_name = args.tts or request.get("tts") or "offline"
-    voice = args.voice or request.get("voice") or "ru-RU-DmitryNeural"
+    voice = args.voice or request.get("voice") or "fr-FR-RemyMultilingualNeural"
     if args.out:
         out_dir = Path(args.out)
         if not out_dir.is_absolute():

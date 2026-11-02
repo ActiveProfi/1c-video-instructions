@@ -13,7 +13,7 @@ from pipeline.bp30_map import find_first
 from pipeline.lesson_yaml import action_plan, load_lesson
 from pipeline.postprod import run_ffmpeg, wav_duration
 from pipeline.proc import text_of
-from pipeline.tts import speak_clip
+from pipeline.tts import TtsLog, speak_clip
 from pipeline.ui_session import EscWatcher, PywinautoSession, StopRequested, save_diagnostics
 
 
@@ -252,6 +252,7 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
     watcher = getattr(session, "watcher", None)
     started = time.time()
     cues = []
+    tts_log = TtsLog()
     raw_error = ""
     try:
         session.connect()
@@ -268,7 +269,7 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
 
             created = ensure_smartphone(session)
             speech = out_dir / "voice" / "smartphone.wav"
-            speak_clip(created["message"], speech, tts_name, voice, project_root)
+            speak_clip(created["message"], speech, tts_name, voice, project_root, log=tts_log)
             cues.append({
                 "step": "smartphone",
                 "start": round(time.time() - started, 3),
@@ -280,7 +281,7 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
             if watcher:
                 watcher.poll()
             speech = out_dir / "voice" / f"step-{scene['id']}.wav"
-            speak_clip(scene["narration"], speech, tts_name, voice, project_root)
+            speak_clip(scene["narration"], speech, tts_name, voice, project_root, log=tts_log)
             cues.append(
                 {
                     "step": scene["id"],
@@ -308,6 +309,7 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
                         "Откройте нужный раздел. Точную подпись можно взять из пробного прогона."
                     ) from None
                 time.sleep(0.15)
+            cues[-1]["end"] = round(time.time() - started, 3)
     except Exception:
         try:
             save_diagnostics(session, out_dir, "запись урока остановилась")
@@ -325,8 +327,14 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
     raw = out_dir / "raw-screen.mp4"
     if not raw.exists() or raw.stat().st_size < 1000:
         raise RuntimeError("Запись экрана не сохранилась. " + text_of(raw_error)[-500:])
-    video = _finish_movie(lesson, cues, raw, out_dir, project_root, tts_name, voice)
+    dump_json(out_dir / "journal.json", {"raw_screen": str(raw), "cues": cues})
+    video, edit = _finish_movie(lesson, cues, raw, out_dir, project_root, tts_name, voice, tts_log)
+    tts_log.write(out_dir / "tts-log.json")
     return {
+        "edit_mode": edit.get("mode"),
+        "edit_warning": edit.get("warning"),
+        "tts_log": str(out_dir / "tts-log.json"),
+        "mixed_voices_warning": tts_log.mixed_warning(),
         "status": "recorded",
         "mode": "record",
         "recorded": True,
@@ -337,23 +345,32 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
     }
 
 
-def _finish_movie(lesson, cues, raw: Path, out_dir: Path, project_root: Path, tts_name: str, voice: str) -> Path:
+def _finish_movie(lesson, cues, raw: Path, out_dir: Path, project_root: Path, tts_name: str, voice: str, tts_log: TtsLog | None = None) -> tuple[Path, dict]:
     intro_wav = out_dir / "voice" / "intro.wav"
     outro_wav = out_dir / "voice" / "outro.wav"
-    speak_clip(lesson["intro_narration"], intro_wav, tts_name, voice, project_root)
-    speak_clip(lesson["outro_narration"], outro_wav, tts_name, voice, project_root)
+    speak_clip(lesson["intro_narration"], intro_wav, tts_name, voice, project_root, log=tts_log)
+    speak_clip(lesson["outro_narration"], outro_wav, tts_name, voice, project_root, log=tts_log)
     intro = out_dir / "intro.mp4"
     outro = out_dir / "outro.mp4"
     _card_clip(lesson["card_title"], lesson["configuration"], "Учебная база. Отправки в ФНС нет.", intro_wav, intro)
     _card_clip(lesson["card_title"], lesson["configuration"], "Конец урока", outro_wav, outro)
+    final = out_dir / "lesson.mp4"
+    try:
+        from pipeline.continuous import edit_continuous, probe_video, steps_from_cues
+
+        steps = steps_from_cues(cues, probe_video(raw)["duration"])
+        report = edit_continuous(raw, steps, out_dir, intro=intro, outro=outro)
+        return final, report
+    except Exception as error:  # noqa: BLE001 - старый режим остаётся запасным
+        warning = f"Монтаж из непрерывной записи не удался ({type(error).__name__}: {str(error)[:300]}). Собран прежний вариант."
+        print(warning, flush=True)
     narrated = out_dir / "screen-narrated.mp4"
     _mux_timeline(raw, cues, narrated)
-    final = out_dir / "lesson.mp4"
     from pipeline.postprod import _concat
 
     _concat([intro, narrated, outro], final, with_audio=True)
     _write_srt(cues, out_dir / "subtitles.srt", intro_duration=wav_duration(intro_wav))
-    return final
+    return final, {"mode": "overlay", "warning": warning}
 
 
 def _card_clip(title: str, configuration: str, footer: str, wav: Path, dest: Path) -> None:

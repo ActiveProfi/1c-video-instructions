@@ -169,6 +169,8 @@ def synthesize_edge(text: str, voice: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     mp3 = dest.with_suffix(".mp3")
     asyncio.run(_save(mp3))
+    if not mp3.exists() or mp3.stat().st_size == 0:
+        raise RuntimeError("NoAudioReceived: Edge вернул пустой файл для голоса " + voice)
     result = run_captured(
         [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)]
     )
@@ -240,16 +242,193 @@ def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: P
     return chosen
 
 
-def speak_clip(text: str, dest: Path, provider: str, voice: str, project_root: Path) -> tuple[str, str | None]:
-    chosen, warning = resolve_provider(provider)
-    try:
-        synthesize(text, dest, chosen, voice, project_root)
-        return chosen, warning
-    except Exception as error:
-        if provider == "auto" and chosen != "offline":
-            synthesize(text, dest, "offline", voice, project_root)
-            return "offline", f"Голос «{chosen}» не ответил ({type(error).__name__}). Включён встроенный голос."
-        raise
+DEFAULT_CHAIN = ("edge", "elevenlabs", "offline")
+EDGE_DEFAULT_VOICE = "fr-FR-RemyMultilingualNeural"
+ELEVENLABS_DEFAULT_VOICE = "pFZP5JQG7iQjIQuC4Bku"
+# Ошибки, после которых повтор того же голоса бесполезен: сервис ответил,
+# но звука для этого голоса нет. Сразу переходим к следующему способу.
+NO_RETRY_ERRORS = ("NoAudioReceived", "UnknownResponse", "ImportError")
+
+
+def parse_chain(value) -> list[str]:
+    """«edge,elevenlabs,offline» -> список. Пусто -> порядок по умолчанию."""
+    if not value:
+        return list(DEFAULT_CHAIN)
+    if isinstance(value, str):
+        items = [item.strip().lower() for item in value.replace(">", ",").replace(";", ",").split(",")]
+    else:
+        items = [str(item).strip().lower() for item in value]
+    known = {"edge", "elevenlabs", "offline", "espeak"}
+    chain = [item for item in items if item]
+    unknown = [item for item in chain if item not in known]
+    if unknown:
+        raise RuntimeError(f"Неизвестный способ озвучки: {', '.join(unknown)}")
+    seen: list[str] = []
+    for item in chain:
+        if item not in seen:
+            seen.append(item)
+    return seen
+
+
+def _error_name(error: BaseException) -> str:
+    cause = error.__cause__ or error.__context__
+    names = [type(error).__name__]
+    if cause is not None:
+        names.append(type(cause).__name__)
+    names.extend(name for name in NO_RETRY_ERRORS if str(error).startswith(name))
+    for name in names:
+        if name in NO_RETRY_ERRORS:
+            return name
+    if names[0] == "RuntimeError" and cause is not None:
+        return names[1]
+    return names[0]
+
+
+def _cleanup_partial(dest: Path) -> None:
+    """Пустой mp3/wav после сбоя Edge раньше оставался и мешал следующему запуску."""
+    for path in dest.parent.glob(dest.stem + "*"):
+        try:
+            if path.is_file() and path.stat().st_size < 400:
+                path.unlink()
+        except OSError:
+            pass
+
+
+class TtsLog:
+    """Чем озвучен каждый фрагмент. Пишется в tts-log.json рядом с уроком."""
+
+    def __init__(self) -> None:
+        self.entries: list[dict] = []
+
+    def add(self, entry: dict) -> None:
+        self.entries.append(entry)
+
+    def voices(self) -> list[str]:
+        result = []
+        for entry in self.entries:
+            key = f"{entry['provider']}:{entry['voice']}"
+            if entry.get("provider") and key not in result:
+                result.append(key)
+        return result
+
+    def mixed_warning(self) -> str | None:
+        voices = self.voices()
+        if len(voices) <= 1:
+            return None
+        fallback = [entry["fragment"] for entry in self.entries if entry.get("fallback")]
+        return (
+            "В уроке смешаны голоса: " + ", ".join(voices) + ". "
+            + ("Запасным голосом озвучены: " + ", ".join(fallback) + ". " if fallback else "")
+            + "Перед публикацией переозвучьте эти фрагменты одним голосом."
+        )
+
+    def to_dict(self) -> dict:
+        return {"fragments": self.entries, "voices": self.voices(), "mixed_voices_warning": self.mixed_warning()}
+
+    def write(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _voice_for(provider: str, voice: str, voices: dict | None) -> str:
+    if voices and voices.get(provider):
+        return voices[provider]
+    if provider == "edge":
+        return voice if voice and not _looks_like_elevenlabs(voice) else EDGE_DEFAULT_VOICE
+    if provider == "elevenlabs":
+        return voice if voice and _looks_like_elevenlabs(voice) else ELEVENLABS_DEFAULT_VOICE
+    return voice or ""
+
+
+def _looks_like_elevenlabs(voice: str) -> bool:
+    return bool(voice) and "-" not in voice and len(voice) >= 16
+
+
+def speak_with_fallback(
+    text: str,
+    dest: Path,
+    chain,
+    voice: str,
+    project_root: Path,
+    voices: dict | None = None,
+    log: TtsLog | None = None,
+    retries: int = 3,
+    base_delay: float = 2.0,
+    sleep=None,
+    fragment: str | None = None,
+) -> dict:
+    """Озвучивает один фрагмент: повторы Edge с нарастающей паузой, затем следующий способ.
+
+    Возвращает запись журнала: какой способ и голос сработали, сколько было попыток и ошибок.
+    Текст ошибок без ключей: в сообщения попадает только тип ошибки и короткое описание.
+    """
+    import time as _time
+
+    sleep = sleep or _time.sleep
+    providers = parse_chain(chain)
+    errors: list[dict] = []
+    attempts = 0
+    for position, provider in enumerate(providers):
+        chosen_voice = _voice_for(provider, voice, voices)
+        tries = retries if provider == "edge" else 1
+        for attempt in range(tries):
+            attempts += 1
+            try:
+                synthesize(text, dest, provider, chosen_voice, project_root)
+                entry = {
+                    "fragment": fragment or dest.stem,
+                    "provider": provider,
+                    "voice": chosen_voice,
+                    "attempts": attempts,
+                    "fallback": position > 0,
+                    "errors": errors,
+                }
+                if log is not None:
+                    log.add(entry)
+                return entry
+            except Exception as error:  # noqa: BLE001 - сбой любого сервиса ведёт к следующему
+                name = _error_name(error)
+                errors.append({"provider": provider, "voice": chosen_voice, "attempt": attempt + 1, "error": name, "detail": str(error)[:200]})
+                _cleanup_partial(dest)
+                if name in NO_RETRY_ERRORS or attempt + 1 >= tries:
+                    break
+                sleep(base_delay * (2 ** attempt))
+    entry = {"fragment": fragment or dest.stem, "provider": None, "voice": None, "attempts": attempts, "fallback": True, "errors": errors}
+    if log is not None:
+        log.add(entry)
+    summary = "; ".join(f"{item['provider']}: {item['error']}" for item in errors)
+    raise RuntimeError(f"Фрагмент «{fragment or dest.stem}» не озвучен ни одним способом ({summary}).")
+
+
+def speak_clip(
+    text: str,
+    dest: Path,
+    provider: str,
+    voice: str,
+    project_root: Path,
+    log: TtsLog | None = None,
+    chain=None,
+    voices: dict | None = None,
+    sleep=None,
+) -> tuple[str, str | None]:
+    """provider=auto или chain: пофрагментный перебор edge -> elevenlabs -> встроенный.
+
+    Явный provider (edge, elevenlabs, offline, espeak) работает как раньше, но Edge
+    теперь повторяется с нарастающей паузой.
+    """
+    chain = chain or (os.environ.get("LESSON_TTS_CHAIN") if provider in ("auto", "chain") else None)
+    if provider in ("auto", "chain") or chain:
+        entry = speak_with_fallback(text, dest, chain or DEFAULT_CHAIN, voice, project_root, voices=voices, log=log, sleep=sleep)
+        warning = None
+        if entry["fallback"]:
+            first = entry["errors"][0] if entry["errors"] else {}
+            warning = (
+                f"Фрагмент «{entry['fragment']}»: {first.get('provider')} не ответил ({first.get('error')}). "
+                f"Озвучено: {entry['provider']} / {entry['voice']}."
+            )
+        return entry["provider"], warning
+    entry = speak_with_fallback(text, dest, [provider], voice, project_root, voices={provider: voice} if voice else None, log=log, sleep=sleep)
+    return entry["provider"], None
 
 
 def resolve_provider(name: str) -> tuple[str, str | None]:
