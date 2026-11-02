@@ -384,7 +384,7 @@ def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: P
     return chosen
 
 
-DEFAULT_CHAIN = ("kie", "edge", "elevenlabs", "offline")
+DEFAULT_CHAIN = ("elevenlabs", "kie", "edge", "offline")
 EDGE_DEFAULT_VOICE = "fr-FR-RemyMultilingualNeural"
 ELEVENLABS_DEFAULT_VOICE = "pFZP5JQG7iQjIQuC4Bku"
 # Ошибки, после которых повтор того же голоса бесполезен: сервис ответил,

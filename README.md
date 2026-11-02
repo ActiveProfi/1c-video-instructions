@@ -422,9 +422,9 @@ tools\Run-Py.cmd -m pipeline edit --journal artifacts\books-continuous-2026-11-0
 
 ????? `edge-tts` ?????? ???? ?????? 7.3.1 ??? ?????. ?????? 7.2.8 ?? `tools\voice-runtime` ???????? ?? ??????? ?????? 403.
 
-### Kie.ai (первый голос в цепочке)
+### Kie.ai (запасной голос)
 
-Цепочка по умолчанию теперь `kie → edge → elevenlabs → offline`. Kie.ai перепродаёт голоса ElevenLabs по своим ценам.
+Цепочка по умолчанию: `elevenlabs → kie → edge → offline`. Первым идёт ElevenLabs напрямую с голосом Лили (`pFZP5JQG7iQjIQuC4Bku`), ключ `ELEVENLABS_API_KEY` в `.env`. Kie стоит вторым: 02.11.2026 его задачи ElevenLabs падали у них с ошибкой 500. Kie.ai перепродаёт голоса ElevenLabs по своим ценам.
 
 - Ключ указывается в `.env` как `KIE_API_KEY=...`, образец лежит в `.env.example`. Без ключа Kie сразу передаёт фрагмент следующему голосу.
 - Модель задаётся через `KIE_TTS_MODEL`. По умолчанию `elevenlabs/text-to-speech-multilingual-v2`, дешевле `elevenlabs/text-to-speech-turbo-2-5`.

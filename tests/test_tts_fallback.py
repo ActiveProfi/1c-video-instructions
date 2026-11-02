@@ -23,7 +23,7 @@ def fake_writer(label):
 
 class ChainTest(unittest.TestCase):
     def test_parse_chain(self):
-        self.assertEqual(tts.parse_chain(None), ["kie", "edge", "elevenlabs", "offline"])
+        self.assertEqual(tts.parse_chain(None), ["elevenlabs", "kie", "edge", "offline"])
         self.assertEqual(tts.parse_chain("elevenlabs, edge>offline,edge"), ["elevenlabs", "edge", "offline"])
         with self.assertRaises(RuntimeError):
             tts.parse_chain("edge,yandex")
@@ -91,10 +91,10 @@ class FallbackTest(unittest.TestCase):
         with mock.patch.object(tts, "synthesize_edge", edge), mock.patch.object(tts, "synthesize_elevenlabs", eleven), mock.patch.dict("os.environ", {"KIE_API_KEY": ""}):
             chosen, warning = tts.speak_clip("Итог.", self.root / "o.wav", "auto", "fr-FR-RemyMultilingualNeural", self.root, log=log, sleep=self.sleeps.append)
         self.assertEqual(chosen, "offline")
-        self.assertIn("kie", warning)  # без ключа Kie сразу уступает место edge
+        self.assertIn("elevenlabs", warning)
         self.assertEqual(self.sleeps, [2.0, 4.0])
         self.assertEqual(log.entries[0]["attempts"], 6)
-        self.assertEqual([e["provider"] for e in log.entries[0]["errors"]][:2], ["kie", "edge"])
+        self.assertEqual([e["provider"] for e in log.entries[0]["errors"]][:3], ["elevenlabs", "kie", "edge"])
         self.assertNotIn("sk_secret_value", str(log.to_dict()))
 
     def test_all_providers_failing_raises_clear_error(self):
