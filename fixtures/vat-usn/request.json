@@ -1,0 +1,11 @@
+{
+  "topic": "Как учесть входной НДС при упрощённой системе налогообложения (УСН) в 1С:Бухгалтерия",
+  "configuration": "Бухгалтерия предприятия, редакция 3.0",
+  "configuration_version": "3.0.197.22",
+  "materials": [],
+  "script": null,
+  "ui_map": "fixtures/vat-usn/ui-map.json",
+  "voice": "ru-RU-DmitryNeural",
+  "tts": "offline",
+  "driver": "mock"
+}

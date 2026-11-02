@@ -1,0 +1,213 @@
+{
+  "canvas": {"width": 1280, "height": 720},
+  "window_title": "1С:Бухгалтерия предприятия",
+  "compute": [
+    {"target": "field_sum", "op": "mul_money", "qty": "field_qty", "price": "field_price"}
+  ],
+  "screens": {
+    "home": {
+      "title": "Начальная страница",
+      "elements": {
+        "home_nav_main": {
+          "name": "Главное",
+          "type": "nav",
+          "control_type": "button",
+          "bounds": {"x": 12, "y": 78, "width": 196, "height": 36}
+        },
+        "home_hint": {
+          "name": "Разделы",
+          "type": "label",
+          "text": "Выберите раздел слева. Учебный проход начнётся с раздела Главное.",
+          "bounds": {"x": 260, "y": 220, "width": 760, "height": 40}
+        }
+      }
+    },
+    "main_section": {
+      "title": "Главное",
+      "elements": {
+        "link_taxes": {
+          "name": "Налоги и отчёты",
+          "type": "link",
+          "control_type": "link",
+          "bounds": {"x": 260, "y": 130, "width": 420, "height": 36}
+        }
+      }
+    },
+    "taxes": {
+      "title": "Налоги и отчёты",
+      "elements": {
+        "nav_purchases": {
+          "name": "Покупки",
+          "type": "nav",
+          "control_type": "button",
+          "bounds": {"x": 12, "y": 122, "width": 196, "height": 36}
+        },
+        "field_system": {
+          "name": "Система налогообложения",
+          "type": "field",
+          "control_type": "edit",
+          "value": "УСН",
+          "bounds": {"x": 260, "y": 110, "width": 520, "height": 64}
+        },
+        "field_object": {
+          "name": "Объект налогообложения",
+          "type": "field",
+          "control_type": "edit",
+          "value": "Доходы минус расходы",
+          "bounds": {"x": 260, "y": 200, "width": 520, "height": 64}
+        }
+      }
+    },
+    "purchases": {
+      "title": "Покупки",
+      "elements": {
+        "link_receipts": {
+          "name": "Поступление (акты, накладные, УПД)",
+          "type": "link",
+          "control_type": "link",
+          "bounds": {"x": 260, "y": 130, "width": 700, "height": 36}
+        }
+      }
+    },
+    "receipt_list": {
+      "title": "Поступление (акты, накладные, УПД)",
+      "elements": {
+        "btn_receipt": {
+          "name": "Поступление",
+          "type": "button",
+          "control_type": "button",
+          "bounds": {"x": 260, "y": 120, "width": 240, "height": 42}
+        },
+        "btn_goods": {
+          "name": "Товары: накладная, УПД",
+          "type": "button",
+          "control_type": "button",
+          "bounds": {"x": 260, "y": 190, "width": 460, "height": 42}
+        }
+      }
+    },
+    "receipt_form": {
+      "title": "Поступление товаров: создание",
+      "elements": {
+        "field_supplier": {
+          "name": "Контрагент:",
+          "type": "field",
+          "control_type": "edit",
+          "bounds": {"x": 250, "y": 78, "width": 430, "height": 64}
+        },
+        "field_in_number": {
+          "name": "Номер входящего документа:",
+          "type": "field",
+          "control_type": "edit",
+          "bounds": {"x": 250, "y": 156, "width": 430, "height": 64}
+        },
+        "field_in_date": {
+          "name": "Дата входящего документа:",
+          "type": "field",
+          "control_type": "edit",
+          "bounds": {"x": 250, "y": 234, "width": 430, "height": 64}
+        },
+        "btn_add": {
+          "name": "Добавить",
+          "type": "button",
+          "control_type": "button",
+          "bounds": {"x": 720, "y": 78, "width": 180, "height": 40}
+        },
+        "field_item": {
+          "name": "Номенклатура",
+          "type": "field",
+          "control_type": "edit",
+          "bounds": {"x": 720, "y": 130, "width": 500, "height": 64}
+        },
+        "field_qty": {
+          "name": "Количество",
+          "type": "field",
+          "control_type": "edit",
+          "bounds": {"x": 720, "y": 206, "width": 200, "height": 64}
+        },
+        "field_price": {
+          "name": "Цена",
+          "type": "field",
+          "control_type": "edit",
+          "bounds": {"x": 940, "y": 206, "width": 200, "height": 64}
+        },
+        "field_vat": {
+          "name": "Ставка НДС",
+          "type": "field",
+          "control_type": "edit",
+          "value": "22%",
+          "bounds": {"x": 720, "y": 282, "width": 200, "height": 64}
+        },
+        "goods_table": {
+          "name": "Товары",
+          "type": "table",
+          "control_type": "table",
+          "bounds": {"x": 250, "y": 330, "width": 980, "height": 140},
+          "columns": ["Номенклатура", "Кол-во", "Цена", "НДС", "Сумма"],
+          "row_from": ["field_item", "field_qty", "field_price", "field_vat", "field_sum"]
+        },
+        "link_prices": {
+          "name": "Цены и валюта",
+          "type": "link",
+          "control_type": "link",
+          "bounds": {"x": 250, "y": 490, "width": 240, "height": 32}
+        },
+        "btn_post": {
+          "name": "Провести",
+          "type": "button",
+          "control_type": "button",
+          "bounds": {"x": 520, "y": 486, "width": 180, "height": 40}
+        },
+        "btn_entries": {
+          "name": "Дт Кт",
+          "type": "button",
+          "control_type": "button",
+          "bounds": {"x": 720, "y": 486, "width": 160, "height": 40}
+        }
+      }
+    },
+    "price_dialog": {
+      "title": "Цены и валюта",
+      "elements": {
+        "vat_in_sum": {
+          "name": "НДС в сумме",
+          "type": "check",
+          "control_type": "check",
+          "checked": true,
+          "bounds": {"x": 300, "y": 160, "width": 460, "height": 40}
+        },
+        "vat_in_cost": {
+          "name": "НДС включать в стоимость",
+          "type": "check",
+          "control_type": "check",
+          "checked": false,
+          "bounds": {"x": 300, "y": 230, "width": 560, "height": 40}
+        },
+        "btn_ok": {
+          "name": "ОК",
+          "type": "button",
+          "control_type": "button",
+          "bounds": {"x": 300, "y": 320, "width": 140, "height": 42}
+        }
+      }
+    },
+    "entries": {
+      "title": "Движения документа",
+      "elements": {
+        "posting_row": {
+          "name": "Дт 10.01 Кт 60.01",
+          "type": "label",
+          "control_type": "text",
+          "text": "Дт 10.01    Кт 60.01    2 440,00",
+          "bounds": {"x": 280, "y": 170, "width": 760, "height": 48}
+        },
+        "posting_note": {
+          "name": "Пояснение",
+          "type": "label",
+          "text": "НДС 440,00 включён в стоимость. Проводки вычета 68.02 нет.",
+          "bounds": {"x": 280, "y": 240, "width": 760, "height": 40}
+        }
+      }
+    }
+  }
+}

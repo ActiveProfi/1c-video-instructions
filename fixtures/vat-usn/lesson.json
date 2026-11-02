@@ -1,0 +1,106 @@
+{
+  "id": "vat-usn-input",
+  "match": {
+    "vat": ["ндс"],
+    "usn": ["усн", "упрощен"]
+  },
+  "title": "Как учесть входной НДС при УСН",
+  "configuration_default": "Бухгалтерия предприятия, редакция 3.0",
+  "start_section": "Главное",
+  "goal": "Показать в учебной базе поступление с входным НДС, включённым в стоимость, если организация на УСН «доходы минус расходы».",
+  "example": {
+    "supplier": "ООО «Альфа»",
+    "incoming_number": "УЧ-УСН-001",
+    "incoming_date": "28.10.2026",
+    "incoming_date_spoken": "двадцать восьмое октября две тысячи двадцать шестого года",
+    "item": "Бумага офисная",
+    "quantity": 10,
+    "price": 244,
+    "vat_rate": "22%",
+    "total": 2440,
+    "vat": 440,
+    "debit": "10.01",
+    "credit": "60.01"
+  },
+  "sources": [
+    {
+      "title": "1С:Бухгалтерия 8",
+      "url": "https://v8.1c.ru/buhv8/",
+      "note": "Обзор продукта. Это не пошаговая методика."
+    },
+    {
+      "title": "1С:ИТС, документация Бухгалтерии предприятия 3.0",
+      "url": "https://its.1c.ru/",
+      "note": "По подписке найдите «НДС включать в стоимость» и учёт расходов при УСН. Полный текст ИТС в проект не копируется. Сверьте подписи со справкой F1 в своей учебной базе."
+    }
+  ],
+  "disclaimer": "Цифры учебные. Счёт учёта зависит от вида номенклатуры и учётной политики. Перед публикацией откройте движения документа в учебной копии. Отчёты в ФНС и платежи этот сценарий не отправляет.",
+  "intro_template": "В этом уроке разберём, как учесть входной НДС, если организация применяет упрощённую систему. Программа — {configuration_spoken}. Начнём с раздела {start_section}: проверим систему налогообложения. Затем в разделе Покупки создадим поступление и посмотрим проводки.",
+  "outro_template": "Итог урока. Поступление от {supplier} на сумму {total_words} проведено. В том числе НДС {vat_words}. При включённой настройке «НДС включать в стоимость» сумма относится на счёт учёта номенклатуры: дебет {debit_spoken}, кредит {credit_spoken}. Кредит здесь — задолженность поставщику. Отдельного вычета по счёту шестьдесят восемь ноль два в этом примере нет. Сверьте проводки с движениями в своей учебной базе.",
+  "scenes": [
+    {
+      "id": "tax",
+      "title": "Система налогообложения",
+      "narration": "Сначала убедимся, что в базе выбрана упрощённая система. Открываем раздел Главное, затем Налоги и отчёты. В поле системы налогообложения смотрим УСН, объект — доходы минус расходы.",
+      "steps": [
+        {"id": "open_main", "action": "click", "target": "home_nav_main", "caption": "Раздел Главное"},
+        {"id": "open_taxes", "action": "click", "target": "link_taxes", "caption": "Налоги и отчёты"},
+        {"id": "check_system", "action": "check", "target": "field_system", "expected": "УСН", "caption": "Система — УСН"}
+      ]
+    },
+    {
+      "id": "create",
+      "title": "Новое поступление",
+      "narration": "Переходим в раздел Покупки. Открываем список поступлений. Нажимаем Поступление и выбираем товары: накладная, УПД. Откроется пустая форма.",
+      "steps": [
+        {"id": "open_purchases", "action": "click", "target": "nav_purchases", "caption": "Раздел Покупки"},
+        {"id": "open_receipts", "action": "click", "target": "link_receipts", "caption": "Список поступлений"},
+        {"id": "open_menu", "action": "click", "target": "btn_receipt", "caption": "Кнопка Поступление"},
+        {"id": "choose_goods", "action": "click", "target": "btn_goods", "caption": "Товары: накладная, УПД"}
+      ]
+    },
+    {
+      "id": "header",
+      "title": "Поставщик и входящий документ",
+      "narration": "Укажем поставщика {supplier}. Номер входящего документа — {incoming_number}. Дата — {incoming_date_spoken}.",
+      "steps": [
+        {"id": "set_supplier", "action": "set_text", "target": "field_supplier", "value": "{supplier}", "caption": "Поставщик"},
+        {"id": "set_number", "action": "set_text", "target": "field_in_number", "value": "{incoming_number}", "caption": "Номер входящего"},
+        {"id": "set_date", "action": "set_text", "target": "field_in_date", "value": "{incoming_date}", "caption": "Дата входящего"}
+      ]
+    },
+    {
+      "id": "goods",
+      "title": "Товар, цена и ставка",
+      "narration": "Добавим строку. Номенклатура — {item}. Количество — {quantity_words}. Цена — {price_words}. Ставка НДС — двадцать два процента. Сумма строки — {total_words}, налог внутри цены — {vat_words}.",
+      "steps": [
+        {"id": "add_row", "action": "click", "target": "btn_add", "caption": "Добавить строку"},
+        {"id": "set_item", "action": "set_text", "target": "field_item", "value": "{item}", "caption": "Номенклатура"},
+        {"id": "set_qty", "action": "set_text", "target": "field_qty", "value": "{quantity}", "caption": "Количество"},
+        {"id": "set_price", "action": "set_text", "target": "field_price", "value": "{price}", "caption": "Цена"},
+        {"id": "check_vat", "action": "check", "target": "field_vat", "expected": "22%", "caption": "Ставка НДС 22%"}
+      ]
+    },
+    {
+      "id": "prices",
+      "title": "НДС в стоимости",
+      "narration": "Цена уже с налогом. Открываем цены и валюта. Проверяем режим НДС в сумме. Для упрощённой системы включаем флажок НДС включать в стоимость и нажимаем ОК.",
+      "steps": [
+        {"id": "open_prices", "action": "click", "target": "link_prices", "caption": "Цены и валюта"},
+        {"id": "show_vat_mode", "action": "focus", "target": "vat_in_sum", "caption": "НДС в сумме"},
+        {"id": "include_vat", "action": "click", "target": "vat_in_cost", "sets_value": "1", "caption": "НДС включать в стоимость"},
+        {"id": "close_prices", "action": "click", "target": "btn_ok", "caption": "ОК"}
+      ]
+    },
+    {
+      "id": "entries",
+      "title": "Проведение и проводки",
+      "narration": "Проводим документ и открываем движения кнопкой дебет кредит. В учебном примере ждём проводку: дебет {debit_spoken}, кредит {credit_spoken}, на {total_words}. Если увидите другой счёт или другую сумму, ролик публиковать рано: в базе другая учётная политика.",
+      "steps": [
+        {"id": "post", "action": "click", "target": "btn_post", "caption": "Провести"},
+        {"id": "open_entries", "action": "click", "target": "btn_entries", "caption": "Дт Кт"},
+        {"id": "check_entry", "action": "check", "target": "posting_row", "expected": "10.01", "caption": "Проводка поступления"}
+      ]
+    }
+  ]
+}

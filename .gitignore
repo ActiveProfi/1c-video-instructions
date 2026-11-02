@@ -1,5 +1,8 @@
 artifacts/
 backups/
+__pycache__/
+*.pyc
+.pytest_cache/
 tools/media-runtime/
 tools/voice-runtime/
 tools/__pycache__/

@@ -32,13 +32,13 @@ async def main():
         for label, voice in pending:
             output = OUT/f'{label}.mp3'
             if output.exists() and output.stat().st_size>1000:
-                result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i',str(output),'-f','null','-'],capture_output=True)
+                result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i',str(output),'-f','null','-'],capture_output=True,text=True,encoding='utf-8',errors='replace')
                 if result.returncode == 0:
                     print(f'{label}: cached and decoded',flush=True)
                     continue
             try:
                 await edge_tts.Communicate(TEXT,voice,rate='+0%',pitch='+0Hz').save(str(output))
-                result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i',str(output),'-f','null','-'],capture_output=True)
+                result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i',str(output),'-f','null','-'],capture_output=True,text=True,encoding='utf-8',errors='replace')
                 if result.returncode or output.stat().st_size<1000:
                     raise RuntimeError('Audio verification failed')
                 print(f'{label}: ready and decoded',flush=True)

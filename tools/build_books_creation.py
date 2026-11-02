@@ -17,7 +17,7 @@ EPOCH = json.loads((MEDIA/'capture-start.json').read_text())['epoch_ms']
 
 
 def run(args):
-    p = subprocess.run([FF, '-hide_banner', '-loglevel', 'error', '-y', *args], capture_output=True, text=True)
+    p = subprocess.run([FF, '-hide_banner', '-loglevel', 'error', '-y', *args], capture_output=True, text=True, encoding='utf-8', errors='replace')
     if p.returncode:
         raise RuntimeError(p.stderr)
 
