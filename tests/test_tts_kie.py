@@ -26,7 +26,7 @@ class FakeKie:
         if state == "success":
             return {"state": "success", "resultJson": json.dumps({"resultUrls": ["https://example.test/a.mp3"]}), "creditsConsumed": 1.2}
         if state == "fail":
-            return {"state": "fail", "failCode": 501, "failMsg": "boom"}
+            return {"state": "fail", "failCode": "500", "failMsg": "Internal Error", "creditsConsumed": 0.0}
         return {"state": state}
 
 
@@ -63,6 +63,8 @@ class KieTest(unittest.TestCase):
         with self.assertRaises(tts.KieError) as caught:
             tts.synthesize_kie("x", "", self.root / "k.wav", self.root, request=FakeKie(["fail"]), download=fake_download, sleep=lambda s: None)
         self.assertFalse(caught.exception.retryable)
+        self.assertIn("task-1", str(caught.exception))
+        self.assertIn("Internal Error", str(caught.exception))
 
     def test_poll_timeout(self):
         with self.assertRaises(tts.KieError) as caught:

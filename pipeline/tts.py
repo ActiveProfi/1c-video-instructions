@@ -264,8 +264,10 @@ def _kie_request(method: str, url: str, api_key: str, body: dict | None = None, 
         url,
         data=data,
         method=method,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
     )
+    if data is not None:
+        request.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8") or "{}")
@@ -327,7 +329,9 @@ def synthesize_kie(
         if state == "success":
             break
         if state == "fail":
-            raise KieError(info.get("failCode") or 501, str(info.get("failMsg") or "генерация не удалась")[:200])
+            # Задача создана, но упала на стороне Kie (state=fail). Кредиты за неё не списываются.
+            code = info.get("failCode") or 501
+            raise KieError(code, f"задача {task_id} не выполнена на стороне Kie: {str(info.get('failMsg') or 'генерация не удалась')[:200]}")
         if waited >= poll_timeout:
             raise KieError(408, f"задача {task_id} не готова за {int(poll_timeout)} с", retryable=True)
         sleep(delay)
