@@ -23,7 +23,7 @@ def fake_writer(label):
 
 class ChainTest(unittest.TestCase):
     def test_parse_chain(self):
-        self.assertEqual(tts.parse_chain(None), ["edge", "elevenlabs", "offline"])
+        self.assertEqual(tts.parse_chain(None), ["kie", "edge", "elevenlabs", "offline"])
         self.assertEqual(tts.parse_chain("elevenlabs, edge>offline,edge"), ["elevenlabs", "edge", "offline"])
         with self.assertRaises(RuntimeError):
             tts.parse_chain("edge,yandex")
@@ -65,8 +65,8 @@ class FallbackTest(unittest.TestCase):
 
         log = tts.TtsLog()
         with mock.patch.object(tts, "synthesize_edge", edge), mock.patch.object(tts, "synthesize_elevenlabs", lambda t, v, d, r: fake_writer("x")(t, d)):
-            tts.speak_with_fallback("Дебет.", self.root / "v1.wav", None, "fr-FR-RemyMultilingualNeural", self.root, log=log, sleep=self.sleeps.append)
-            second = tts.speak_with_fallback("кре\u0301дит.", self.root / "v2.wav", None, "fr-FR-RemyMultilingualNeural", self.root, log=log, sleep=self.sleeps.append)
+            tts.speak_with_fallback("Дебет.", self.root / "v1.wav", "edge,elevenlabs,offline", "fr-FR-RemyMultilingualNeural", self.root, log=log, sleep=self.sleeps.append)
+            second = tts.speak_with_fallback("кре\u0301дит.", self.root / "v2.wav", "edge,elevenlabs,offline", "fr-FR-RemyMultilingualNeural", self.root, log=log, sleep=self.sleeps.append)
         self.assertEqual(self.sleeps, [])
         self.assertEqual(second["provider"], "elevenlabs")
         self.assertEqual(second["voice"], tts.ELEVENLABS_DEFAULT_VOICE)
@@ -88,12 +88,13 @@ class FallbackTest(unittest.TestCase):
 
         (self.root / ".env").write_text("ELEVENLABS_API_KEY=sk_secret_value\n", encoding="utf-8")
         log = tts.TtsLog()
-        with mock.patch.object(tts, "synthesize_edge", edge), mock.patch.object(tts, "synthesize_elevenlabs", eleven):
+        with mock.patch.object(tts, "synthesize_edge", edge), mock.patch.object(tts, "synthesize_elevenlabs", eleven), mock.patch.dict("os.environ", {"KIE_API_KEY": ""}):
             chosen, warning = tts.speak_clip("Итог.", self.root / "o.wav", "auto", "fr-FR-RemyMultilingualNeural", self.root, log=log, sleep=self.sleeps.append)
         self.assertEqual(chosen, "offline")
-        self.assertIn("edge", warning)
+        self.assertIn("kie", warning)  # без ключа Kie сразу уступает место edge
         self.assertEqual(self.sleeps, [2.0, 4.0])
-        self.assertEqual(log.entries[0]["attempts"], 5)
+        self.assertEqual(log.entries[0]["attempts"], 6)
+        self.assertEqual([e["provider"] for e in log.entries[0]["errors"]][:2], ["kie", "edge"])
         self.assertNotIn("sk_secret_value", str(log.to_dict()))
 
     def test_all_providers_failing_raises_clear_error(self):

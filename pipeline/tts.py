@@ -13,6 +13,8 @@ import os
 import random
 import shutil
 import unicodedata
+import urllib.error
+import urllib.parse
 import urllib.request
 import wave
 from array import array
@@ -219,6 +221,140 @@ def synthesize_elevenlabs(text: str, voice: str, dest: Path, project_root: Path)
         raise RuntimeError("Не удалось преобразовать голос ElevenLabs в wav: " + detail[-800:])
 
 
+KIE_BASE_URL = "https://api.kie.ai"
+KIE_DEFAULT_MODEL = "elevenlabs/text-to-speech-multilingual-v2"
+# Лили (pFZP5JQG7iQjIQuC4Bku) и Сары (EXAVITQu4vr4xnSDxMaL) в списке голосов Kie нет.
+# Белла есть, и её проба уже одобрялась в artifacts/voice-tests-elevenlabs.
+KIE_DEFAULT_VOICE = "hpp4J3VqNfWAUOO0d1Us"
+KIE_RETRYABLE_CODES = {429, 455, 500}
+
+
+# Голоса, которые принимает Kie для моделей ElevenLabs (docs.kie.ai, 02.11.2026).
+KIE_VOICES = frozenset({
+    "EkK5I93UQWFDigLMpZcX", "Z3R5wn05IrDiVCyEkUrK", "NNl6r8mD7vthiJatiJt1", "YOq2y2Up4RgXP2HyXjE5",
+    "B8gJV1IhpuegLxdpXFOE", "2zRM7PkgwBPiau2jvVXc", "1SM7GgM6IMuvQlz2BwM3", "5l5f8iK3YPeGga21rQIX",
+    "scOwDtmlUjD3prqpp97I", "NOpBlnGInO9m6vDvFkFC", "BZgkqPqms7Kj9ulSkVzn", "wo6udizrrtpIxWGp2qJk",
+    "gU0LNdkMOQCOrPrwtbee", "DGzg6RaUqxGRTHSBjfgF", "x70vRnQBMBu4FAYhjJbO", "Sm1seazb4gs7RSlUVw7c",
+    "P1bg08DkjqiVEzOn76yG", "qDuRKMlYmrm8trt5QyBn", "qXpMhyvQqiRxWQs4qSSB", "TX3LPaxmHKxFdv7VOQHJ",
+    "N2lVS1w4EtoT3dr4eOWO", "FGY2WhTYpPnrIDTdsKH5", "kPzsL2i3teMYv0FxEYQ6", "UgBBYS2sOqTuMpoF3BR0",
+    "hpp4J3VqNfWAUOO0d1Us", "nPczCjzI2devNBz1zQrb", "uYXf8XasLslADfZ2MB4u", "gs0tAILXbY5DNrJrsM6F",
+    "DTKMou8ccj1ZaWGBiotd", "vBKc2FfBKJfcZNyEt1n6", "DYkrAHD8iwork3YSUBbs", "56AoDkrOh6qfVPDXZ7Pt",
+    "eR40ATw9ArzDf9h3v7t7", "g6xIsTj2HwM6VR4iXFCw", "lcMyyd2HUfFzxdCaC4Ta", "6aDn1KB0hjpdcocrUkmq",
+    "Sq93GQT4X1lKDXsQcixO", "flHkNRp1BlvT73UL6gyz", "9yzdeviXkFddZ4Oz8Mok", "pPdl9cQBQq4p6mRkZy2Z",
+    "zYcjlYFOd3taleS0gkk3", "nzeAacJi50IvxcyDnMXa", "ruirxsoakN0GWmGNIo04", "TC0Zp7WVFzhA8zpTlRqV",
+    "ljo9gAlSqKOvF6D8sOsX", "PPzYpIqttlTYA83688JI", "8JVbfL6oEdmuxKn5DK2C", "iCrDUkL56s3C8sCRl7wb",
+    "wJqPPQ618aTW29mptyoc", "EiNlNiXeDU1pqqOPrYMO", "4YYIPFl9wE5c4L2eu2Gb", "6F5Zhi321D3Oq7v1oNT4",
+    "YXpFCvM1S3JbWEJhoskW", "LG95yZDEHg6fCZdQjLqj", "CeNX9CMwmxDxUF5Q2Inm", "aD6riP1btT197c6dACmy",
+    "mtrellq69YZsNwzUSyXh", "dHd5gvgSOzSfduK4CvEg", "eVItLK1UvXctxuaRV2Oq", "esy0r39YPLQjOczyOib8",
+    "Tsns2HvNFKfGiNjllgqo", "1U02n4nD6AdIZ9CjF053", "AeRdCCKzvd23BpJoofzx", "LruHrtVF6PSyGItzMNHS",
+    "1wGbFxmAM3Fgw63G1zZJ", "hqfrgApggtO1785R4Fsn", "MJ0RnG71ty4LH3dvNfSd",
+})
+
+
+class KieError(RuntimeError):
+    def __init__(self, code, message: str, retryable: bool = False) -> None:
+        super().__init__(f"Kie.ai {code}: {message}")
+        self.code = code
+        self.retryable = retryable
+
+
+def _kie_request(method: str, url: str, api_key: str, body: dict | None = None, timeout: float = 60) -> dict:
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as error:
+        raise KieError(error.code, "HTTP ошибка", retryable=error.code in KIE_RETRYABLE_CODES or error.code >= 500) from None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise KieError("network", type(error).__name__, retryable=True) from None
+    code = payload.get("code")
+    if code != 200:
+        # Kie отвечает HTTP 200 даже при ошибке: смотрим поле code.
+        raise KieError(code, str(payload.get("msg") or "ошибка")[:200], retryable=code in KIE_RETRYABLE_CODES)
+    return payload.get("data") or {}
+
+
+def kie_api_key(project_root: Path) -> str:
+    return os.environ.get("KIE_API_KEY") or read_dotenv(project_root).get("KIE_API_KEY") or ""
+
+
+def synthesize_kie(
+    text: str,
+    voice: str,
+    dest: Path,
+    project_root: Path,
+    request=None,
+    download=None,
+    sleep=None,
+    poll_timeout: float = 300,
+) -> dict:
+    """Kie.ai: createTask -> опрос recordInfo -> скачать mp3 -> wav.
+
+    request/download/sleep подменяются в тестах. Ключ берётся только из окружения или .env.
+    """
+    import time as _time
+
+    api_key = kie_api_key(project_root)
+    if not api_key:
+        raise KieError(401, "ключ KIE_API_KEY не найден в .env")
+    settings = read_dotenv(project_root)
+    model = os.environ.get("KIE_TTS_MODEL") or settings.get("KIE_TTS_MODEL") or KIE_DEFAULT_MODEL
+    request = request or _kie_request
+    sleep = sleep or _time.sleep
+    created = request(
+        "POST",
+        f"{KIE_BASE_URL}/api/v1/jobs/createTask",
+        api_key,
+        {
+            "model": model,
+            "input": {"text": text, "voice": voice or KIE_DEFAULT_VOICE, "stability": 0.45, "similarity_boost": 0.75, "style": 0, "speed": 1},
+        },
+    )
+    task_id = created.get("taskId")
+    if not task_id:
+        raise KieError("no-task", "в ответе нет taskId", retryable=True)
+    waited = 0.0
+    delay = 2.0
+    while True:
+        info = request("GET", f"{KIE_BASE_URL}/api/v1/jobs/recordInfo?taskId={urllib.parse.quote(task_id)}", api_key, None)
+        state = info.get("state")
+        if state == "success":
+            break
+        if state == "fail":
+            raise KieError(info.get("failCode") or 501, str(info.get("failMsg") or "генерация не удалась")[:200])
+        if waited >= poll_timeout:
+            raise KieError(408, f"задача {task_id} не готова за {int(poll_timeout)} с", retryable=True)
+        sleep(delay)
+        waited += delay
+        delay = min(delay * 1.5, 10.0)
+    result = info.get("resultJson") or "{}"
+    urls = (json.loads(result) if isinstance(result, str) else result).get("resultUrls") or []
+    if not urls:
+        raise KieError("no-audio", "в результате нет ссылки на звук")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    mp3 = dest.with_suffix(".mp3")
+    if download is None:
+        with urllib.request.urlopen(urls[0], timeout=120) as response:
+            mp3.write_bytes(response.read())
+    else:
+        download(urls[0], mp3)
+    if not mp3.exists() or mp3.stat().st_size == 0:
+        raise KieError("no-audio", "скачан пустой файл")
+    converted = run_captured(
+        [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)]
+    )
+    if converted.returncode:
+        detail = text_of(converted.stderr).strip() or text_of(converted.stdout).strip()
+        raise RuntimeError("Не удалось преобразовать голос Kie в wav: " + detail[-800:])
+    return {"task_id": task_id, "model": model, "credits": info.get("creditsConsumed")}
+
+
 def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: Path) -> str:
     speech = prepare_speech(text)
     signature = hashlib.sha256(f"{provider}\n{voice}\n{speech}".encode("utf-8")).hexdigest()[:16]
@@ -236,18 +372,20 @@ def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: P
         synthesize_edge(speech, voice, cache)
     elif provider == "elevenlabs":
         synthesize_elevenlabs(speech, voice, cache, project_root)
+    elif provider == "kie":
+        synthesize_kie(speech, voice, cache, project_root)
     else:
         raise RuntimeError(f"Неизвестный способ озвучки: {provider}")
     shutil.copyfile(cache, dest)
     return chosen
 
 
-DEFAULT_CHAIN = ("edge", "elevenlabs", "offline")
+DEFAULT_CHAIN = ("kie", "edge", "elevenlabs", "offline")
 EDGE_DEFAULT_VOICE = "fr-FR-RemyMultilingualNeural"
 ELEVENLABS_DEFAULT_VOICE = "pFZP5JQG7iQjIQuC4Bku"
 # Ошибки, после которых повтор того же голоса бесполезен: сервис ответил,
 # но звука для этого голоса нет. Сразу переходим к следующему способу.
-NO_RETRY_ERRORS = ("NoAudioReceived", "UnknownResponse", "ImportError")
+NO_RETRY_ERRORS = ("NoAudioReceived", "UnknownResponse", "ImportError", "KieFatal")
 
 
 def parse_chain(value) -> list[str]:
@@ -258,7 +396,7 @@ def parse_chain(value) -> list[str]:
         items = [item.strip().lower() for item in value.replace(">", ",").replace(";", ",").split(",")]
     else:
         items = [str(item).strip().lower() for item in value]
-    known = {"edge", "elevenlabs", "offline", "espeak"}
+    known = {"kie", "edge", "elevenlabs", "offline", "espeak"}
     chain = [item for item in items if item]
     unknown = [item for item in chain if item not in known]
     if unknown:
@@ -337,6 +475,8 @@ def _voice_for(provider: str, voice: str, voices: dict | None) -> str:
         return voice if voice and not _looks_like_elevenlabs(voice) else EDGE_DEFAULT_VOICE
     if provider == "elevenlabs":
         return voice if voice and _looks_like_elevenlabs(voice) else ELEVENLABS_DEFAULT_VOICE
+    if provider == "kie":
+        return voice if voice in KIE_VOICES else KIE_DEFAULT_VOICE
     return voice or ""
 
 
@@ -370,7 +510,7 @@ def speak_with_fallback(
     attempts = 0
     for position, provider in enumerate(providers):
         chosen_voice = _voice_for(provider, voice, voices)
-        tries = retries if provider == "edge" else 1
+        tries = retries if provider in ("edge", "kie") else 1
         for attempt in range(tries):
             attempts += 1
             try:
@@ -388,6 +528,10 @@ def speak_with_fallback(
                 return entry
             except Exception as error:  # noqa: BLE001 - сбой любого сервиса ведёт к следующему
                 name = _error_name(error)
+                if isinstance(error, KieError):
+                    name = f"Kie{error.code}"
+                    if not error.retryable:
+                        name = "KieFatal"
                 errors.append({"provider": provider, "voice": chosen_voice, "attempt": attempt + 1, "error": name, "detail": str(error)[:200]})
                 _cleanup_partial(dest)
                 if name in NO_RETRY_ERRORS or attempt + 1 >= tries:
