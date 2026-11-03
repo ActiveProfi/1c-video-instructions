@@ -16,6 +16,7 @@ def run_captured(args: list[str], check: bool = False) -> subprocess.CompletedPr
     return subprocess.run(
         [str(part) for part in args],
         capture_output=True,
+        stdin=subprocess.DEVNULL,  # ffmpeg иначе читает stdin и может зависнуть
         text=True,
         encoding="utf-8",
         errors="replace",

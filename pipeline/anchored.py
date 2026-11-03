@@ -40,6 +40,7 @@ from pipeline.continuous import (
     write_srt,
 )
 from pipeline.postprod import run_ffmpeg, sentences
+from pipeline import pointer
 
 FPS = 25
 
@@ -68,6 +69,7 @@ class AnchoredStep:
     anchors: list | None = None
     legal_note: str = ""
     phrase_wavs: dict = field(default_factory=dict)  # номер предложения -> wav переозвученной фразы
+    points: list = field(default_factory=list)  # pointer.Point: наведение курсора без клика
 
 
 @dataclass
@@ -96,6 +98,8 @@ class Beat:
     notes: list[str] = field(default_factory=list)
     pauses: list[float] = field(default_factory=list)  # стоп-кадр перед каждым куском keep
     sync: list[dict] = field(default_factory=list)
+    points: list[dict] = field(default_factory=list)  # наведения синтетического курсора
+    cursor: dict | None = None  # настоящий курсор на стоп-кадре и заплатка поверх него
 
 
 # ---------- фразы из wav ----------
@@ -542,7 +546,43 @@ def caption_png(text: str, dest: Path, width: int, accent=(255, 153, 0, 255), si
     return dest
 
 
-def render_beat(raw: Path, beat: Beat, wav: Path, dest: Path, size: tuple[int, int], caption: Path | None, annotate: bool) -> None:
+def _coverage(step: AnchoredStep, beats: list[Beat]) -> list[dict]:
+    """Каждая фраза: действие (клик), наведение курсора или общая фраза без элемента."""
+    rows = []
+    for beat in beats:
+        member_says = [(step.actions[b["action"]].label, step.actions[b["action"]].say) for b in beat.boxes]
+        for k, phrase in enumerate(beat.phrases):
+            text = phrase.text.lower().replace("ё", "е")
+            acts = [label for label, say in member_says if say and say.lower().replace("ё", "е") in text]
+            if not acts and beat.action is not None and k == 0:
+                acts = [step.actions[beat.action].label]
+            pts = [p["label"] for p in beat.points if p["phrase"] == k]
+            kind = "действие" if acts else ("наведение" if pts else "общая")
+            rows.append({"phrase": phrase.text, "kind": kind, "actions": acts, "points": pts,
+                         "covered": [p["covered"] for p in beat.points if p["phrase"] == k]})
+    return rows
+
+
+def _run_render(args: list[str], seconds: float, attempts: int = 3) -> None:
+    """ffmpeg с тайм-аутом и повтором: сложные графы (много входов, PNG-петли) в ffmpeg 7–8 изредка зависают."""
+    from pipeline.continuous import _ffmpeg
+
+    cmd = [_ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *[str(a) for a in args]]
+    last = ""
+    for _ in range(attempts):
+        try:
+            result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=30 + 6 * seconds)
+        except subprocess.TimeoutExpired:
+            last = "ffmpeg завис (тайм-аут), повторяю"
+            continue
+        if result.returncode == 0:
+            return
+        last = result.stderr.decode("utf-8", "replace")[-1500:]
+    raise RuntimeError("ffmpeg не собрал такт: " + last)
+
+
+def render_beat(raw: Path, beat: Beat, wav: Path, dest: Path, size: tuple[int, int], caption: Path | None, annotate: bool,
+                cursor_img: Path | None = None) -> None:
     width, height = size
     # Каждый кусок — отдельный вход с -ss/-t: несколько trim одного потока в ffmpeg 8 (Windows) зависали.
     parts, labels = [], []
@@ -575,13 +615,53 @@ def render_beat(raw: Path, beat: Beat, wav: Path, dest: Path, size: tuple[int, i
                 f",drawbox=x={l}:y={t}:w={max(4, r - l)}:h={max(4, b - t)}:color=0xFF9900@0.95:t=4"
                 f":enable='between(t,{box['from']:.3f},{box['to']:.3f})'"
             )
-    video += ",format=yuv420p"
     extra: list[str] = []
     overlays: list[str] = []
-    label = "[base]"
     next_input = 1 + max(1, len(beat.keep))
+    pre: list[str] = []
+    track = None
+    if annotate and beat.points and cursor_img is not None:
+        info = beat.cursor or {}
+        start_pos = info.get("cursor")
+        appear, frames = pointer.keyframes(beat, start_pos)
+        track = (appear, frames)
+        if info.get("patch"):
+            l, t, _w, _h = info["region"]
+            extra += ["-loop", "1", "-framerate", str(FPS), "-t", f"{beat.duration + 0.5:.3f}", "-i", str(info["patch"])]
+            pre.append(f"[vb][{next_input}:v]overlay=x={l}:y={t}:shortest=0:enable='between(t,{appear:.3f},{beat.duration:.3f})'[vp]")
+            next_input += 1
+        elif info.get("region"):
+            l, t, w, h = info["region"]
+            l, t = max(1, l), max(1, t)
+            w, h = min(w, width - l - 1), min(h, height - t - 1)
+            pre.append(f"[vb]delogo=x={l}:y={t}:w={w}:h={h}:enable='between(t,{appear:.3f},{beat.duration:.3f})'[vp]")
+        for p in beat.points:
+            l, t, r, b = p["rect"]
+            video += (
+                f",drawbox=x={l - 4}:y={t - 4}:w={r - l + 8}:h={b - t + 8}:color=0xFF9900@0.95:t=4"
+                f":enable='between(t,{p['arrive']:.3f},{p['to']:.3f})'"
+            )
+    if pre:
+        # заплатка ложится до рамок: рамки и курсор поверх
+        boxes_part = video[video.index(",drawbox") :] if ",drawbox" in video else ""
+        head = video[: len(video) - len(boxes_part)] if boxes_part else video
+        parts.append(head + "[vb]")
+        parts.extend(pre)
+        video = "[vp]null" + boxes_part
+    video += ",format=yuv420p"
+    label = "[base]"
+    if track is not None:
+        appear, frames = track
+        extra += ["-loop", "1", "-framerate", str(FPS), "-t", f"{beat.duration + 0.5:.3f}", "-i", str(cursor_img)]
+        hx, hy = pointer.HOT
+        overlays.append(
+            f"{label}[{next_input}:v]overlay=x='{pointer.path_expr(frames, 1, hx)}':y='{pointer.path_expr(frames, 2, hy)}'"
+            f":eval=frame:shortest=0:enable='between(t,{appear:.3f},{beat.duration:.3f})'[o{next_input}]"
+        )
+        label = f"[o{next_input}]"
+        next_input += 1
     if annotate and caption is not None:
-        extra += ["-loop", "1", "-i", str(caption)]
+        extra += ["-loop", "1", "-framerate", str(FPS), "-t", f"{beat.duration + 0.5:.3f}", "-i", str(caption)]
         overlays.append(f"{label}[{next_input}:v]overlay=x=16:y=H-h-16:shortest=0[o{next_input}]")
         label = f"[o{next_input}]"
         next_input += 1
@@ -590,7 +670,7 @@ def render_beat(raw: Path, beat: Beat, wav: Path, dest: Path, size: tuple[int, i
             png = box.get("caption_png")
             if not png:
                 continue
-            extra += ["-loop", "1", "-i", str(png)]
+            extra += ["-loop", "1", "-framerate", str(FPS), "-t", f"{beat.duration + 0.5:.3f}", "-i", str(png)]
             overlays.append(
                 f"{label}[{next_input}:v]overlay=x=16:y=H-h-74:shortest=0"
                 f":enable='between(t,{box['from']:.3f},{box['to'] + 0.6:.3f})'[o{next_input}]"
@@ -602,7 +682,7 @@ def render_beat(raw: Path, beat: Beat, wav: Path, dest: Path, size: tuple[int, i
     else:
         graph = parts + [video + "[v]"]
     graph.append("[0:a]aresample=48000,aformat=channel_layouts=stereo[a]")
-    run_ffmpeg(
+    _run_render(
         inputs + extra + [
             "-filter_complex", ";".join(graph),
             "-map", "[v]", "-map", "[a]",
@@ -610,7 +690,8 @@ def render_beat(raw: Path, beat: Beat, wav: Path, dest: Path, size: tuple[int, i
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
             "-c:a", "aac", "-b:a", "160k",
             str(dest),
-        ]
+        ],
+        beat.duration,
     )
 
 
@@ -647,6 +728,7 @@ def edit_anchored(
     cues: list[tuple[float, float, str]] = []
     report_steps = []
     cursor = max(0.0, (steps[0].actions[0].start - 1.0) if steps and steps[0].actions else 0.0)
+    cursor_img: Path | None = None
     for si, step in enumerate(steps):
         samples, rate = read_wav(step.wav)
         phrases, note = split_phrases(step.narration, samples, rate)
@@ -654,6 +736,13 @@ def edit_anchored(
         next_start = steps[si + 1].actions[0].start if si + 1 < len(steps) and steps[si + 1].actions else None
         beats, cursor = plan_step(step, phrases, freezes, cursor, next_start, total, lead=lead, margin=margin)
         caption = caption_png(step.title, build / f"caption-{si:02d}.png", size[0]) if annotate and step.title else None
+        point_notes = pointer.assign_points(step.points, beats, [a.say for a in step.actions]) if annotate else []
+        for beat in beats:
+            if annotate and beat.points:
+                hold_at = (beat.keep[-1][1] - 1.0 / FPS) if beat.keep else max(0.0, beat.raw_start)
+                beat.cursor = pointer.hide_real_cursor(raw, hold_at, size, total, build / f"patch-{si:02d}-{beat.index:02d}.png")
+                if cursor_img is None:
+                    cursor_img = pointer.cursor_png(build / "cursor.png")
         for beat in beats:
             if annotate:
                 for box in beat.boxes:
@@ -672,7 +761,7 @@ def edit_anchored(
             wav = build / f"beat-{si:02d}-{beat.index:02d}.wav"
             beat_audio(beat, samples, rate, wav)
             dest = build / f"beat-{si:02d}-{beat.index:02d}-{_safe(step.id)}.mp4"
-            render_beat(raw, beat, wav, dest, size, caption, annotate)
+            render_beat(raw, beat, wav, dest, size, caption, annotate, cursor_img)
             pieces.append(dest)
             moment = clock + beat.voice_at
             for pi, phrase in enumerate(beat.phrases):
@@ -688,6 +777,8 @@ def edit_anchored(
                 "id": step.id,
                 "phrase_note": note,
                 "revoiced": replaced,
+                "point_notes": point_notes,
+                "coverage": _coverage(step, beats),
                 "beats": [
                     {
                         "action": None if b.action is None else step.actions[b.action].label,
@@ -700,6 +791,8 @@ def edit_anchored(
                         "phrases": [p.text for p in b.phrases],
                         "boxes": [{k: v for k, v in x.items()} for x in b.boxes],
                         "notes": b.notes,
+                        "points": b.points,
+                        "cursor": None if not b.cursor else {k: (str(v) if isinstance(v, Path) else v) for k, v in b.cursor.items()},
                     }
                     for b in beats
                 ],
@@ -768,6 +861,7 @@ def load_anchored_journal(path: Path) -> tuple[Path, list[AnchoredStep], dict] |
                 anchors=item.get("anchors"),
                 legal_note=item.get("legal_note") or "",
                 phrase_wavs=phrase_wavs,
+                points=pointer.points_from_json(item.get("point_at")),
             )
         )
     return raw, steps, data
@@ -783,5 +877,6 @@ def steps_from_live_cues(cues: list[dict]) -> list[AnchoredStep]:
             for a in cue.get("actions") or []
         ]
         steps.append(AnchoredStep(id=str(cue["step"]), narration=cue["narration"], wav=Path(cue["wav"]), actions=actions,
-                                  title=cue.get("title") or "", anchors=cue.get("anchors"), legal_note=cue.get("legal_note") or ""))
+                                  title=cue.get("title") or "", anchors=cue.get("anchors"), legal_note=cue.get("legal_note") or "",
+                                  points=pointer.points_from_json(cue.get("points"))))
     return steps

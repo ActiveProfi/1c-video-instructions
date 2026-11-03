@@ -260,6 +260,28 @@ def _action_record(session, action: dict, element, start: float, end: float) -> 
     return record
 
 
+def _point_record(session, point: dict) -> dict | None:
+    """Наведение курсора без клика: рамка элемента по UI Automation (point_at.element) в координатах записи."""
+    record = {"label": point.get("label") or point.get("element") or "", "say": point.get("say") or ""}
+    if point.get("rect"):
+        record["rect"] = list(point["rect"])
+        return record
+    if not point.get("element"):
+        return None
+    try:
+        element = find_first(session, {"name": point["element"], "kind": "show", "role": point.get("role") or "",
+                                       "within": point.get("within") or ""}, 3)
+        left, top, _right, _bottom = session.window_rect()
+        rect = [int(element.left) - left, int(element.top) - top, int(element.right) - left, int(element.bottom) - top]
+    except Exception:  # noqa: BLE001 - без наведения урок всё равно собирается
+        return None
+    if rect[2] <= rect[0] or rect[3] <= rect[1]:
+        return None
+    record["rect"] = rect
+    record["element"] = point["element"]
+    return record
+
+
 def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_name: str, voice: str, overlay: Overlay | None = None, grab: ScreenGrab | None = None) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     overlay = overlay or WinOverlay()
@@ -329,6 +351,10 @@ def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_
                 if element is not None:
                     cues[-1]["actions"].append(_action_record(session, action, element, action_start, time.time() - started))
                 time.sleep(0.15)
+            for point in scene.get("point_at") or []:
+                found = _point_record(session, point)
+                if found:
+                    cues[-1].setdefault("points", []).append(found)
             cues[-1]["end"] = round(time.time() - started, 3)
     except Exception:
         try:

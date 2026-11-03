@@ -65,6 +65,28 @@ BOOKS_ANCHORS = [
 # Лучше без рамки, чем кривая рамка.
 BOOKS_NO_BOX = {"focus_price", "search_books", "select_books", "close_upd_dialog", "open_receipt_entries"}
 
+# Наведения курсора без клика (сцена -> список): слово из фразы и рамка элемента в координатах записи.
+# Старая запись без UI Automation, поэтому рамки размечены по кадрам вручную (1438x754).
+BOOKS_POINTS = {
+    1: [{"label": "Новый документ", "say": "откроется новый документ", "rect": [312, 70, 762, 98]}],
+    2: [{"label": "Номер и дата УПД", "say": "сначала укажем номер", "rect": [316, 136, 586, 170]}],
+    3: [{"label": "Договор", "say": "договор подставился", "rect": [323, 252, 734, 279]},
+        {"label": "Признак УПД", "say": "признак упд", "rect": [198, 654, 266, 678]}],
+    4: [{"label": "Кнопка «Добавить»", "say": "добавим товар", "rect": [200, 347, 303, 373]},
+        {"label": "Единица: упаковка", "say": "единица", "rect": [733, 414, 871, 445]},
+        {"label": "Ставка НДС", "say": "ставку ндс", "rect": [1180, 414, 1271, 445]}],
+    5: [{"label": "Цена с НДС", "say": "цена у нас", "rect": [873, 414, 1060, 445]},
+        {"label": "Всего и НДС", "say": "всего получилось", "rect": [1004, 656, 1411, 689]},
+        {"label": "Признак УПД", "say": "признак упд включ", "rect": [198, 654, 266, 678]}],
+    6: [{"label": "Счёт-фактура", "say": "полученный счёт-фактура", "rect": [344, 140, 496, 170]},
+        {"label": "Номер и дата", "say": "проверим номер", "rect": [344, 140, 640, 170]},
+        {"label": "Суммы", "say": "и суммы", "rect": [200, 349, 1177, 378]},
+        {"label": "Флажок вычета НДС", "say": "флажок вычета", "rect": [526, 174, 893, 196]}],
+    7: [{"label": "Первая проводка", "say": "первая строка", "rect": [208, 272, 1397, 383]},
+        {"label": "Вторая проводка", "say": "вторая —", "rect": [208, 390, 1397, 501]}],
+    8: [{"label": "Проводка вычета НДС", "say": "видим вычет", "rect": [208, 272, 1397, 383]}],
+}
+
 BOOKS_SAY = {
     "navigate_purchases": "начнём с раздела",
     "navigate_receipts_link": "здесь открываем",
@@ -133,6 +155,9 @@ def build(media: Path, spec_path: Path, out: Path, before: float = 0.25, after: 
         anchors = scene.get("anchors")
         if anchors is None and index < len(BOOKS_ANCHORS) and spec_path.name == "books-creation-video.json":
             anchors = BOOKS_ANCHORS[index]
+        point_at = scene.get("point_at")
+        if point_at is None and spec_path.name == "books-creation-video.json":
+            point_at = BOOKS_POINTS.get(index, [])
         phrase_wavs = {str(p["sentence"]): p["wav"] for p in revoiced if p["scene"] == index and Path(p["wav"]).exists()}
         steps.append(
             {
@@ -144,6 +169,7 @@ def build(media: Path, spec_path: Path, out: Path, before: float = 0.25, after: 
                 "actions": actions,
                 "anchors": anchors,
                 "phrase_wavs": phrase_wavs,
+                "point_at": point_at or [],
             }
         )
     out.mkdir(parents=True, exist_ok=True)
