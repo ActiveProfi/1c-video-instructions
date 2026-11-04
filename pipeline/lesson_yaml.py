@@ -114,6 +114,8 @@ def from_source(raw: dict) -> dict:
                 "clicks": clicks,
                 "targets": ui_targets(step.get("ui_element") or ""),
                 "fields": list(step.get("fields") or []),
+                # наведение курсора без клика: [{"say": "слово из фразы", "element": "имя элемента UI"}]
+                "point_at": list(step.get("point_at") or []),
             }
         )
     goal = raw.get("goal") or ""

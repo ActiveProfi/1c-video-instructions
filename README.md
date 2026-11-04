@@ -436,3 +436,32 @@ tools\Run-Py.cmd -m pipeline edit --journal artifacts\books-continuous-2026-11-0
 - Цена: 1 кредит ≈ $0,005, ElevenLabs TTS стоит от 6 кредитов (≈ $0,03) за 1000 символов. Неудачные задачи не списываются. Урок примерно на 1500 символов стоит около $0,05–0,10.
 - Проба одной фразы:
   `tools\Run-Py.cmd -c "from pathlib import Path; from pipeline import tts; print(tts.synthesize_kie('Сначала укажем номер и дату из документа поставщика.', tts.KIE_DEFAULT_VOICE, Path('artifacts/kie-test/phrase.wav'), Path('.')))"`
+
+## Словарь произношения (бухгалтерия, 1С)
+
+`config/pronunciation.json` — ударения (U+0301) и раскрытие аббревиатур (НДС, УПД, Дт/Кт, 1С …).
+Словарь применяется **только к тексту для TTS** (`pipeline/tts.py → pronounce`); субтитры остаются без знаков ударения.
+Дебет и кредит — ударение на первый слог (де́бет, кре́дит).
+
+Переозвучить только предложения, где словарь меняет ударение в терминах из `revoice_stems`, остальное — из кэша:
+
+    py -3 tools/revoice_phrases.py --dry-run   # план и число символов
+    py -3 tools/revoice_phrases.py             # озвучка ElevenLabs, phrases/phrases.json
+    py -3 tools/books_edit_journal.py --out artifacts/books-lily-v3
+    py -3 -m pipeline edit --journal artifacts/books-lily-v3/edit-journal.json --out artifacts/books-lily-v3
+
+Рамки аннотаций: UIA-координаты (новые записи) или детекция по кадрам с консенсусом нескольких замеров (старые записи).
+Нет уверенности — нет рамки. `box: false` в журнале отключает рамку для действия; рамка живёт не дольше 3 с.
+
+## Курсор следует за речью (point_at)
+
+Всё, что озвучивается, показывается: если фраза называет поле, сумму или кнопку, а клика нет,
+в монтаже курсор плавно едет к элементу, стоит на нём всю фразу, элемент обведён рамкой.
+
+- В сценарии сцены: `"point_at": [{"say": "всего получилось", "element": "Всего"}]` — для новых записей
+  рамку берёт `pipeline live` из UI Automation; для старых записей — `"rect": [l, t, r, b]` (разметка по кадрам,
+  для урока про книги — `BOOKS_POINTS` в `tools/books_edit_journal.py`).
+- Настоящий курсор на стоп-кадре снимается (свечение и стрелка, `pipeline/pointer.py`), поэтому курсор в кадре один;
+  в конце такта синтетический курсор возвращается на место настоящего.
+- В `edit-report.json` у каждого шага `coverage`: фраза → действие / наведение / общая.
+- Проба произношения: `tools/pron_ab_probe.py` (A/B одной фразы на разных моделях ElevenLabs).

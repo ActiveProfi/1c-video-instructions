@@ -26,12 +26,8 @@ ROOT_TOOLS = Path(__file__).resolve().parents[1] / "tools"
 
 
 def pronounce(text: str) -> str:
-    import sys
-
-    tools = str(ROOT_TOOLS)
-    if tools not in sys.path:
-        sys.path.insert(0, tools)
-    from pronunciation import pronounce as apply
+    """Словарь произношения config/pronunciation.json (ударения и аббревиатуры)."""
+    from pipeline.pronunciation import pronounce as apply
 
     return apply(text)
 
@@ -181,7 +177,7 @@ def synthesize_edge(text: str, voice: str, dest: Path) -> None:
         raise RuntimeError("Не удалось преобразовать голос Edge в wav: " + detail[-800:])
 
 
-def synthesize_elevenlabs(text: str, voice: str, dest: Path, project_root: Path) -> None:
+def synthesize_elevenlabs(text: str, voice: str, dest: Path, project_root: Path, previous_text: str = "", next_text: str = "") -> None:
     settings = read_dotenv(project_root)
     api_key = os.environ.get("ELEVENLABS_API_KEY") or settings.get("ELEVENLABS_API_KEY")
     if not api_key:
@@ -196,6 +192,8 @@ def synthesize_elevenlabs(text: str, voice: str, dest: Path, project_root: Path)
             "text": text,
             "model_id": model,
             "voice_settings": {"stability": 0.45, "similarity_boost": 0.75, "style": 0, "use_speaker_boost": True},
+            **({"previous_text": previous_text} if previous_text else {}),
+            **({"next_text": next_text} if next_text else {}),
         }
     ).encode("utf-8")
     request = urllib.request.Request(

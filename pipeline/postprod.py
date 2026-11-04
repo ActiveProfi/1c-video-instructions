@@ -21,7 +21,7 @@ def _ffprobe() -> str:
 
 
 def run_ffmpeg(args: list[str]) -> None:
-    result = run_captured([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", *args])
+    result = run_captured([_ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *args])
     if result.returncode:
         detail = text_of(result.stderr).strip() or text_of(result.stdout).strip()
         raise RuntimeError("ffmpeg не собрал фрагмент: " + detail[-1500:])

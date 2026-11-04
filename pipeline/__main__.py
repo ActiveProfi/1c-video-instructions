@@ -53,6 +53,7 @@ def _live(root: Path, args) -> int:
         root,
         args.tts or "auto",
         args.voice or "fr-FR-RemyMultilingualNeural",
+        annotations=not args.no_annotations,
     )
     if result.get("status") != "recorded":
         print(result.get("message") or "Запись не завершена.", flush=True)
@@ -153,10 +154,30 @@ def _edit(root: Path, args) -> int:
     journal = Path(args.journal)
     if not journal.is_absolute():
         journal = root / journal
-    raw, steps, data = load_journal(journal)
     out = Path(args.out) if args.out else journal.parent / "continuous-edit"
     if not out.is_absolute():
         out = root / out
+    if not args.no_anchor:
+        from pipeline.anchored import edit_anchored, load_anchored_journal
+
+        loaded = load_anchored_journal(journal)
+        if loaded is not None:
+            raw, steps, data = loaded
+            intro, outro = data.get("intro_clip"), data.get("outro_clip")
+            report = edit_anchored(
+                raw,
+                steps,
+                out,
+                intro=(journal.parent / intro) if intro else None,
+                outro=(journal.parent / outro) if outro else None,
+                annotate=not args.no_annotations,
+                freeze_noise=args.freeze_noise,
+            )
+            print(f"Готово: {report['video']}", flush=True)
+            print(f"Длительность {report['duration_seconds']} с, монтаж с якорями, аннотации: {'да' if report['annotations'] else 'нет'}.", flush=True)
+            return 0
+        print("В журнале нет действий шагов (actions) — собираю прежним монтажом.", flush=True)
+    raw, steps, data = load_journal(journal)
     intro = data.get("intro_clip")
     outro = data.get("outro_clip")
     report = edit_continuous(
@@ -197,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Найти элементы 1С и снять кадры, ничего не нажимая")
     parser.add_argument("--journal", default=None, help="edit: edit-journal.json с отметками шагов и озвучкой")
     parser.add_argument("--tts-chain", default=None, help="Порядок озвучки при сбое, например edge,elevenlabs,offline")
+    parser.add_argument("--no-annotations", action="store_true", help="edit/live: без рамок и подписей шагов")
+    parser.add_argument("--no-anchor", action="store_true", help="edit: прежний монтаж без привязки фраз к действиям")
     parser.add_argument("--max-speed", type=float, default=2.0, help="edit: наибольшее ускорение действий")
     parser.add_argument("--freeze-noise", type=float, default=0.0005, help="edit: порог freezedetect, меньше — чувствительнее")
     parser.add_argument("--process-id", type=int, default=0, help="PID окна 1С, если их несколько")
