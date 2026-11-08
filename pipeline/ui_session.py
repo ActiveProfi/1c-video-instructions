@@ -218,6 +218,66 @@ def choose_match(candidates: list[dict], name: str, role: str = "", within: str 
     return chosen, "; ".join(notes), several
 
 
+class AmbiguousTarget(LookupError):
+    """После фильтров осталось несколько элементов. Первый из списка не выбираем."""
+
+    def __init__(self, name: str, count: int, note: str = "") -> None:
+        super().__init__(name)
+        self.name = name
+        self.count = count
+        self.note = note
+
+
+def unique_match(candidates: list[dict], name: str, role: str = "", within: str = ""):
+    """Один элемент. Ноль совпадений — LookupError. Больше одного — AmbiguousTarget.
+
+    Номер в списке здесь не используется: выбрать «первый из похожих» значило бы
+    подставить неточную рамку.
+    """
+    wanted = norm(name)
+
+    def matches(item) -> bool:
+        for value in text_variants(item):
+            folded = norm(value)
+            if folded == wanted or wanted in folded:
+                return True
+        return False
+
+    def exact(item) -> bool:
+        return any(norm(value) == wanted for value in text_variants(item))
+
+    named = [item for item in candidates if matches(item)]
+    if not named:
+        raise LookupError(name)
+    exact_items = [item for item in named if exact(item)]
+    pool = exact_items or named
+    notes = []
+    wanted_role = canonical_role(role) if role else ""
+    if wanted_role:
+        by_role = [item for item in pool if item.get("role") == wanted_role]
+        if not by_role:
+            raise LookupError(name)
+        pool = by_role
+        notes.append(f"тип {wanted_role}")
+    if within:
+        parent_token = norm(within)
+        by_parent = [
+            item for item in pool
+            if any(parent_token in norm(parent) for parent in item.get("parents") or [])
+        ]
+        if not by_parent:
+            raise LookupError(name)
+        pool = by_parent
+        notes.append(f"внутри «{within}»")
+    visible = [item for item in pool if item.get("visible", True)]
+    if not visible:
+        raise LookupError(name)
+    pool = visible
+    if len(pool) != 1:
+        raise AmbiguousTarget(name, len(pool), "; ".join(notes))
+    return pool[0], "; ".join(notes)
+
+
 def save_diagnostics(session, folder: Path, reason: str = "") -> dict:
     """Снимок экрана и список элементов. Пишется при любой остановке."""
     folder.mkdir(parents=True, exist_ok=True)
@@ -255,13 +315,17 @@ class FakeSession:
         for item in names:
             if isinstance(item, dict):
                 title = item.get("name") or ""
-                self.controls.append({
+                control = {
                     "name": title,
                     "role": canonical_role(item.get("role") or item.get("control_type") or "menu"),
                     "parents": list(item.get("parents") or ([item["parent"]] if item.get("parent") else [])),
                     "visible": item.get("visible", True),
                     "value": str(item.get("value", self.values.get(title, ""))),
-                })
+                }
+                for key in ("left", "top", "right", "bottom", "texts"):
+                    if key in item:
+                        control[key] = item[key]
+                self.controls.append(control)
             else:
                 self.controls.append({
                     "name": item,
@@ -363,12 +427,50 @@ class FakeSession:
                 return Found(
                     name=title,
                     value=str(chosen.get("value") or self.values.get(title, "")),
+                    left=int(chosen.get("left", 40)),
+                    top=int(chosen.get("top", 80)),
+                    right=int(chosen.get("right", 240)),
+                    bottom=int(chosen.get("bottom", 120)),
                     role=chosen.get("role") or "",
                     parents=tuple(chosen.get("parents") or []),
                     ambiguous=several,
                     note=note,
                 )
             if time.time() >= deadline:
+                raise LookupError(name)
+            time.sleep(0.01)
+
+    def find_unique(self, name: str, timeout: float = 0.2, role: str = "", within: str = "") -> Found:
+        """Один видимый элемент. Похожие подписи не склеиваются в «первый попавшийся»."""
+        self.watcher.poll()
+        deadline = time.time() + timeout
+        last_ambiguous = None
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = unique_match(self.controls, name, role, within)
+            except AmbiguousTarget as error:
+                chosen = None
+                last_ambiguous = error
+            except LookupError:
+                chosen = None
+            if chosen is not None:
+                title = chosen["name"]
+                return Found(
+                    name=title,
+                    value=str(chosen.get("value") or self.values.get(title, "")),
+                    left=int(chosen.get("left", 40)),
+                    top=int(chosen.get("top", 80)),
+                    right=int(chosen.get("right", 240)),
+                    bottom=int(chosen.get("bottom", 120)),
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                if last_ambiguous is not None:
+                    raise last_ambiguous
                 raise LookupError(name)
             time.sleep(0.01)
 
@@ -560,12 +662,47 @@ class PywinautoSession:
         return (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
 
     def move_cursor(self, x: int, y: int) -> None:
+        self.cursor = (int(x), int(y))
         try:
             import ctypes
 
             ctypes.windll.user32.SetCursorPos(int(x), int(y))
         except Exception:
             pass
+
+    def find_unique(self, name: str, timeout: float = 8, role: str = "", within: str = "") -> Found:
+        """Один элемент. Если подпись повторяется, поиск останавливается, а не берёт первый."""
+        deadline = time.time() + timeout
+        last_ambiguous = None
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = unique_match(self._snapshot(), name, role, within)
+            except AmbiguousTarget as error:
+                chosen = None
+                last_ambiguous = error
+            except LookupError:
+                chosen = None
+            if chosen is not None:
+                left, top, right, bottom = chosen["box"]
+                return Found(
+                    name=chosen["name"],
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                    raw=chosen["raw"],
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                if last_ambiguous is not None:
+                    raise last_ambiguous
+                raise LookupError(name)
+            self._cache = None
+            time.sleep(0.45)
 
     def _snapshot(self) -> list[dict]:
         if self._cache is not None and time.time() - self._cache_at < 1:

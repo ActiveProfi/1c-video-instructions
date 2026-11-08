@@ -283,6 +283,11 @@ def _point_record(session, point: dict) -> dict | None:
 
 
 def record_lesson(session, lesson: dict, out_dir: Path, project_root: Path, tts_name: str, voice: str, overlay: Overlay | None = None, grab: ScreenGrab | None = None) -> dict:
+    if lesson.get("recording") == "synced":
+        raise RuntimeError(
+            "Синхронный урок не собирается запасным монтажом. "
+            "Речь и показ должны совпасть по времени, поэтому старый монтаж здесь не запускается."
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
     overlay = overlay or WinOverlay()
     grab = grab if grab is not None else ScreenGrab()
@@ -542,10 +547,17 @@ def run_dry(lesson_path: Path, out_dir: Path, session=None) -> dict:
         "error": None,
     }
     active = session
+    synced = False
     try:
         lesson = load_lesson(lesson_path)
+        synced = lesson.get("recording") == "synced"
         active = session or PywinautoSession(EscWatcher())
-        report = dry_run(active, lesson)
+        if synced:
+            from pipeline.books_sync import preflight_synced
+
+            report = preflight_synced(active, lesson)
+        else:
+            report = dry_run(active, lesson)
     except StopRequested as error:
         report["status"] = "stopped"
         report["error"] = str(error)
@@ -563,17 +575,35 @@ def run_dry(lesson_path: Path, out_dir: Path, session=None) -> dict:
             except Exception:
                 pass
     finally:
-        if active is not None and hasattr(active, "finish"):
+        if active is not None and not synced and hasattr(active, "finish"):
             try:
                 active.finish()
             except Exception:
                 pass
         dump_json(out_dir / "dry-run.json", report)
+        if synced:
+            dump_json(out_dir / "preflight.json", report)
     return report
 
 
 def run_record(lesson_path: Path, out_dir: Path, project_root: Path, tts_name: str, voice: str, session=None, overlay=None, grab=None, annotations: bool = True) -> dict:
     lesson = load_lesson(lesson_path)
+    if lesson.get("recording") == "synced":
+        from pipeline.books_sync import run_synced
+
+        session = session or PywinautoSession(EscWatcher())
+        try:
+            result = run_synced(lesson, out_dir, project_root, tts_name, voice, session, grab=grab)
+        except StopRequested as error:
+            result = {
+                "status": "stopped",
+                "recorded": False,
+                "legacy_fallback": False,
+                "windows_1c_verified": False,
+                "message": str(error),
+            }
+        dump_json(out_dir / "live-result.json", result)
+        return result
     lesson["annotations"] = annotations
     session = session or PywinautoSession(EscWatcher())
     try:

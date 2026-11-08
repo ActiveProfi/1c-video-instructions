@@ -357,12 +357,21 @@ def synthesize_kie(
     return {"task_id": task_id, "model": model, "credits": info.get("creditsConsumed")}
 
 
-def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: Path) -> str:
+def speech_cache_file(dest: Path, provider: str, voice: str, text: str, cache_dir: Path | None = None) -> Path:
+    """Файл кэша по уже произнесённому тексту. Общий каталог переживает папку одного прогона."""
     speech = prepare_speech(text)
     signature = hashlib.sha256(f"{provider}\n{voice}\n{speech}".encode("utf-8")).hexdigest()[:16]
-    cache = dest.parent / f"{dest.stem}-{signature}.wav"
+    if cache_dir is not None:
+        return Path(cache_dir) / f"{signature}.wav"
+    return dest.parent / f"{dest.stem}-{signature}.wav"
+
+
+def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: Path, cache_dir: Path | None = None) -> str:
+    speech = prepare_speech(text)
+    cache = speech_cache_file(dest, provider, voice, text, cache_dir)
     if cache.exists() and cache.stat().st_size > 400:
-        if cache != dest:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if cache.resolve() != dest.resolve():
             shutil.copyfile(cache, dest)
         return provider
     chosen = provider
@@ -378,7 +387,9 @@ def synthesize(text: str, dest: Path, provider: str, voice: str, project_root: P
         synthesize_kie(speech, voice, cache, project_root)
     else:
         raise RuntimeError(f"Неизвестный способ озвучки: {provider}")
-    shutil.copyfile(cache, dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if cache.resolve() != dest.resolve():
+        shutil.copyfile(cache, dest)
     return chosen
 
 
@@ -498,6 +509,7 @@ def speak_with_fallback(
     base_delay: float = 2.0,
     sleep=None,
     fragment: str | None = None,
+    cache_dir: Path | None = None,
 ) -> dict:
     """Озвучивает один фрагмент: повторы Edge с нарастающей паузой, затем следующий способ.
 
@@ -516,7 +528,7 @@ def speak_with_fallback(
         for attempt in range(tries):
             attempts += 1
             try:
-                synthesize(text, dest, provider, chosen_voice, project_root)
+                synthesize(text, dest, provider, chosen_voice, project_root, cache_dir=cache_dir)
                 entry = {
                     "fragment": fragment or dest.stem,
                     "provider": provider,
@@ -556,6 +568,7 @@ def speak_clip(
     chain=None,
     voices: dict | None = None,
     sleep=None,
+    cache_dir: Path | None = None,
 ) -> tuple[str, str | None]:
     """provider=auto или chain: пофрагментный перебор edge -> elevenlabs -> встроенный.
 
@@ -564,7 +577,7 @@ def speak_clip(
     """
     chain = chain or (os.environ.get("LESSON_TTS_CHAIN") if provider in ("auto", "chain") else None)
     if provider in ("auto", "chain") or chain:
-        entry = speak_with_fallback(text, dest, chain or DEFAULT_CHAIN, voice, project_root, voices=voices, log=log, sleep=sleep)
+        entry = speak_with_fallback(text, dest, chain or DEFAULT_CHAIN, voice, project_root, voices=voices, log=log, sleep=sleep, cache_dir=cache_dir)
         warning = None
         if entry["fallback"]:
             first = entry["errors"][0] if entry["errors"] else {}
@@ -573,7 +586,7 @@ def speak_clip(
                 f"Озвучено: {entry['provider']} / {entry['voice']}."
             )
         return entry["provider"], warning
-    entry = speak_with_fallback(text, dest, [provider], voice, project_root, voices={provider: voice} if voice else None, log=log, sleep=sleep)
+    entry = speak_with_fallback(text, dest, [provider], voice, project_root, voices={provider: voice} if voice else None, log=log, sleep=sleep, cache_dir=cache_dir)
     return entry["provider"], None
 
 

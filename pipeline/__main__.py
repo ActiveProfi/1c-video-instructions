@@ -22,6 +22,17 @@ def _require_training(args) -> bool:
     return False
 
 
+def _loaded_lesson(path: Path):
+    if not path.exists():
+        return None
+    try:
+        from pipeline.lesson_yaml import load_lesson
+
+        return load_lesson(path)
+    except Exception:
+        return None
+
+
 def _live(root: Path, args) -> int:
     if not _require_training(args):
         return 1
@@ -31,11 +42,38 @@ def _live(root: Path, args) -> int:
     lesson = Path(args.lesson)
     if not lesson.is_absolute():
         lesson = root / lesson
-    out = Path(args.out) if args.out else root / "artifacts" / "lessons" / lesson.stem
-    if not out.is_absolute():
-        out = root / out
+    loaded = _loaded_lesson(lesson)
+    synced = bool(loaded and loaded.get("recording") == "synced")
+    if synced and not args.out:
+        from datetime import datetime
+
+        from pipeline.books_sync import output_directory
+
+        out = output_directory(root, None, datetime.now().strftime("%Y%m%d-%H%M%S"))
+    else:
+        out = Path(args.out) if args.out else root / "artifacts" / "lessons" / lesson.stem
+        if not out.is_absolute():
+            out = root / out
     if args.dry_run:
         report = run_dry(lesson, out)
+        if synced:
+            from pipeline.books_sync import preflight_exit_code
+
+            print(
+                "Пробный прогон поступления книг. Кнопки не нажимались, номера только прочитаны с экрана. "
+                f"Новый номер, если запись начнётся сейчас: {report.get('incoming_number_preview') or '—'}.",
+                flush=True,
+            )
+            for name in report.get("ambiguous") or []:
+                print(f"Подпись повторяется, запись нельзя начинать: {name}", flush=True)
+            for name in report.get("mismatches") or []:
+                print(f"Значение на экране не совпало, запись нельзя начинать: {name}", flush=True)
+            for name in report.get("missing_on_this_screen") or []:
+                print(f"На этом экране пока нет: {name}", flush=True)
+            if report.get("message") and report.get("status") != "preflight":
+                print(report["message"], flush=True)
+            print(f"Отчёт: {out / 'preflight.json'}", flush=True)
+            return preflight_exit_code(report)
         print(
             f"Пробный прогон. Найдено: {len(report.get('found') or [])}. "
             f"Не найдено: {len(report.get('missing') or [])}. Запись не велась, документы не проводились.",
@@ -47,18 +85,34 @@ def _live(root: Path, args) -> int:
             print(f"Нет на экране: {name}", flush=True)
         print(f"Отчёт: {out / 'dry-run.json'}", flush=True)
         return 1 if report.get("status") == "stopped" else 0
+    if synced:
+        from pipeline.books_sync import resolve_voice
+
+        try:
+            tts_name, voice = resolve_voice(loaded, args.tts, args.voice)
+        except RuntimeError as error:
+            print(str(error), flush=True)
+            return 2
+    else:
+        tts_name = args.tts or "auto"
+        voice = args.voice or "fr-FR-RemyMultilingualNeural"
     result = run_record(
         lesson,
         out,
         root,
-        args.tts or "auto",
-        args.voice or "fr-FR-RemyMultilingualNeural",
+        tts_name,
+        voice,
         annotations=not args.no_annotations,
     )
     if result.get("status") != "recorded":
         print(result.get("message") or "Запись не завершена.", flush=True)
+        if synced and result.get("status") == "blocked":
+            return 2
         return 1
     print(f"Готово: {result['video']}", flush=True)
+    if synced:
+        print("Это новая запись экрана. Старый ролик из папки books-creation не подставлялся.", flush=True)
+        print(f"Отчёты: {out / 'audit.json'}, {out / 'coverage.json'}, {out / 'timing-report.json'}", flush=True)
     return 0
 
 
