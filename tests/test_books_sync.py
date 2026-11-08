@@ -502,12 +502,12 @@ class TabItemPreflightTest(unittest.TestCase):
         "quantity": "ControlType.Edit",
         "price": "ControlType.Edit",
         "vat-rate": "ControlType.Edit",
-        "price-mode": "ControlType.Text",
-        "total": "ControlType.Text",
-        "vat-amount": "ControlType.Text",
+        "price-mode": "ControlType.Hyperlink",
+        "total": "ControlType.Edit",
+        "vat-amount": "ControlType.Edit",
         "net": "ControlType.Text",
         "post": "ControlType.Button",
-        "open-upd": "ControlType.Hyperlink",
+        "open-upd": "ControlType.CheckBox",
         "invoice": "ControlType.Text",
         "open-entries": "ControlType.Button",
         "entries": "ControlType.Text",
@@ -608,7 +608,7 @@ class TabItemPreflightTest(unittest.TestCase):
         session = FakeSession(
             [
                 {"name": "Альфа ООО", "role": "text", "visible": True, "value": "Альфа ООО"},
-                {"name": "Покупки", "role": "menu", "visible": True},
+                {"name": "Главное", "role": "ControlType.TabItem", "visible": True},
             ],
             texts=["Альфа ООО"],
         )
@@ -641,8 +641,7 @@ class TabItemPreflightTest(unittest.TestCase):
         self.assertFalse(report["filled"])
         self.assertFalse(report["posted"])
         self.assertFalse(report["document_modified"])
-        self.assertIn("tab", report["message"])
-        self.assertIn("menu", report["message"])
+        self.assertIn("Покупки", report["message"])
 
 
 class PurchasesMenuDumpTest(unittest.TestCase):
@@ -709,9 +708,47 @@ class PurchasesMenuDumpTest(unittest.TestCase):
         with self.assertRaises(AmbiguousTarget):
             session.find_unique("Поступление", timeout=0.05, role="menu", within="Покупки")
         later = next(item for item in report["steps"] if item["step"] == "open-upd")
-        self.assertFalse(later["found"])
         self.assertFalse(later["uia_confirmed"])
         self.assertNotIn("УПД", session.clicks)
+        self.assertNotIn("Создать", session.clicks)
+
+    def test_unique_caption_is_used_even_when_the_guessed_type_differs(self):
+        session = self.session()
+        element = books_sync._find_strict(
+            session,
+            {"id": "open-list", "element": "Поступление (акты, накладные, УПД)", "role": "hyperlink", "aliases": []},
+            0.05,
+        )
+        self.assertEqual(element.role, "menu")
+        self.assertEqual(session.clicks, [])
+
+    def test_a_shorter_word_does_not_choose_the_first_longer_caption(self):
+        session = self.session()
+        with self.assertRaises(books_sync.TargetError) as caught:
+            books_sync._find_strict(session, {"id": "create", "element": "Поступление", "role": "button", "aliases": []}, 0.05)
+        self.assertEqual(caught.exception.kind, "missing")
+        self.assertEqual(session.clicks, [])
+
+    def test_section_tab_is_not_used_as_the_warehouse_field(self):
+        session = FakeSession(
+            [{"name": "Склад", "role": "ControlType.TabItem", "visible": True, "parents": ["Панель разделов"]}],
+            texts=["Альфа ООО"],
+        )
+        with self.assertRaises(books_sync.TargetError) as caught:
+            books_sync._find_strict(session, {"id": "warehouse", "element": "Склад", "role": "field", "aliases": []}, 0.05)
+        self.assertIn("вкладка", str(caught.exception).lower())
+        self.assertEqual(session.clicks, [])
+
+    def test_training_vat_is_given_and_the_upd_flag_is_not_clicked(self):
+        lesson = load_lesson(LESSON_PATH)
+        rate = next(scene for scene in lesson["scenes"] if scene["id"] == "vat-rate")
+        self.assertIn("10%", rate["legal_note"])
+        self.assertIn("учебн", rate["legal_note"].lower())
+        upd = next(scene for scene in lesson["scenes"] if scene["id"] == "open-upd")
+        self.assertEqual(upd["sync"]["kind"], "point")
+        self.assertIn("не делаем", upd["legal_note"])
+        beats = books_sync.beats_from_lesson(lesson)
+        self.assertFalse(any(beat["kind"] == "click" and "счет-фактур" in beat["element"].lower() for beat in beats))
 
 
 if __name__ == "__main__":

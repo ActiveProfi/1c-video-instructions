@@ -17,7 +17,7 @@ from pathlib import Path
 from pipeline.postprod import write_srt
 from pipeline.pronunciation import strip_stress
 from pipeline.tts import read_dotenv, speak_clip, speech_cache_file
-from pipeline.ui_session import AmbiguousTarget, ParentMismatch, RoleMismatch, canonical_role, guard_name
+from pipeline.ui_session import AmbiguousTarget, RejectedOnly, canonical_role, guard_name
 
 LILY_VOICE = "pFZP5JQG7iQjIQuC4Bku"
 LILY_MODEL = "eleven_multilingual_v2"
@@ -201,6 +201,7 @@ def beats_from_lesson(lesson: dict) -> list[dict]:
                 "element": element,
                 "role": str(sync.get("role") or ""),
                 "within": str(sync.get("within") or ""),
+                "row_label": str(sync.get("row_label") or ""),
                 "aliases": [str(item) for item in (sync.get("aliases") or []) if str(item) != element],
                 "value": str(sync.get("value") or ""),
                 "covers": str(sync.get("covers") or ""),
@@ -320,35 +321,36 @@ def _check_shown(session, element, beat: dict) -> None:
 
 
 def _find_strict(session, beat: dict, timeout: float):
+    """Ищет смысл шага на текущем окне.
+
+    Задуманный тип не останавливает шаг, если на экране одна точная подпись.
+    Останавливает несколько разных элементов и опасный выбор: поле «Склад» не заменяется вкладкой раздела.
+    """
     names = [beat["element"], *beat.get("aliases", [])]
     last = None
+    reject = ["tab"] if beat.get("role") == "field" else []
     for index, name in enumerate(names):
         try:
-            return session.find_unique(
+            return session.find_exact(
                 name,
                 timeout=timeout if index == 0 else min(float(timeout), 1.2),
                 role=beat.get("role") or "",
                 within=beat.get("within") or "",
+                row_label=beat.get("row_label") or "",
+                reject_roles=reject,
             )
         except AmbiguousTarget as error:
             raise TargetError(
                 "ambiguous",
                 name,
-                f"Подпись «{name}» встречается {error.count} раз. Рамка не ставится наугад.",
+                f"Подпись «{name}» встречается {error.count} раз. Первая похожая не выбирается.",
                 beat["id"],
             ) from error
-        except RoleMismatch as error:
+        except RejectedOnly as error:
             raise TargetError(
                 "missing",
                 name,
-                f"Подпись «{name}» есть на экране, тип «{', '.join(error.roles)}». Урок ищет «{beat.get('role') or error.wanted}».",
-                beat["id"],
-            ) from error
-        except ParentMismatch as error:
-            raise TargetError(
-                "missing",
-                name,
-                f"Подпись «{name}» есть на экране, но не внутри «{error.within}».",
+                f"«{name}» на экране — вкладка раздела, не поле формы. Вкладка не нажимается.",
                 beat["id"],
             ) from error
         except LookupError as error:

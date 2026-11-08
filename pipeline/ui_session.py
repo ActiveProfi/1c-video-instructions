@@ -92,6 +92,7 @@ EXACT_ROLES = {
     "tab": "tab",
     "tabitem": "tab",
     "dataitem": "cell",
+    "check": "check",
     "checkbox": "check",
     "radiobutton": "check",
     "header": "header",
@@ -252,6 +253,10 @@ class RoleMismatch(LookupError):
         self.wanted = wanted
 
 
+class RejectedOnly(LookupError):
+    """Подпись есть только у контрола, который для этого шага опасен, например вкладка раздела."""
+
+
 class ParentMismatch(LookupError):
     """Подпись есть, но не в том родительском элементе, который указан в уроке."""
 
@@ -310,6 +315,65 @@ def unique_match(candidates: list[dict], name: str, role: str = "", within: str 
     if len(pool) != 1:
         raise AmbiguousTarget(name, len(pool), "; ".join(notes))
     return pool[0], "; ".join(notes)
+
+
+def _center_y(item) -> float:
+    if item.get("box"):
+        return (item["box"][1] + item["box"][3]) / 2
+    return (int(item.get("top", 0)) + int(item.get("bottom", 0))) / 2
+
+
+def exact_named(candidates: list[dict], name: str) -> list[dict]:
+    """Только полное совпадение подписи. «Поступление» не цепляет более длинные пункты."""
+    wanted = norm(name)
+    found = []
+    for item in candidates:
+        if not item.get("visible", True):
+            continue
+        if any(norm(value) == wanted for value in text_variants(item)):
+            found.append(item)
+    return found
+
+
+def exact_match(candidates: list[dict], name: str, role: str = "", within: str = "", row_label: str = "", reject_roles=()):
+    """Как tools/Run-LessonPlan.ps1: одно точное имя. Тип сужает только когда имён несколько.
+
+    Первая похожая подпись не выбирается. Тип и родитель сужают выбор, только когда имён несколько.
+    Единственная точная подпись берётся и при другом типе: тип тогда наблюдают, а не запрещают шаг.
+    """
+    pool = exact_named(candidates, name)
+    rejected = {canonical_role(item) for item in (reject_roles or []) if item}
+    if rejected:
+        kept = [item for item in pool if item.get("role") not in rejected]
+        if pool and not kept:
+            raise RejectedOnly(name)
+        pool = kept
+    if not pool:
+        raise LookupError(name)
+    if within:
+        token = norm(within)
+        scoped = [item for item in pool if any(token in norm(parent) for parent in item.get("parents") or [])]
+        if scoped:
+            pool = scoped
+        elif len(pool) != 1:
+            raise AmbiguousTarget(name, len(pool), f"не внутри «{within}»")
+    if row_label:
+        labels = exact_named(candidates, row_label)
+        if len(labels) == 1:
+            line = _center_y(labels[0])
+            pool = [item for item in pool if abs(_center_y(item) - line) <= 10]
+            if not pool:
+                raise LookupError(name)
+        elif len(pool) != 1:
+            raise AmbiguousTarget(name, len(pool), "одна строка не выделена")
+    if len(pool) > 1 and role:
+        wanted_role = canonical_role(role)
+        typed = [item for item in pool if item.get("role") == wanted_role]
+        if typed:
+            pool = typed
+    if len(pool) != 1:
+        raise AmbiguousTarget(name, len(pool), "точное имя")
+    return pool[0], "точное имя"
 
 
 def save_diagnostics(session, folder: Path, reason: str = "") -> dict:
@@ -486,6 +550,37 @@ class FakeSession:
                 raise
             except LookupError:
                 chosen = None
+            if chosen is not None:
+                title = chosen["name"]
+                return Found(
+                    name=title,
+                    value=str(chosen.get("value") or self.values.get(title, "")),
+                    left=int(chosen.get("left", 40)),
+                    top=int(chosen.get("top", 80)),
+                    right=int(chosen.get("right", 240)),
+                    bottom=int(chosen.get("bottom", 120)),
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                raise LookupError(name)
+            time.sleep(0.01)
+
+    def find_exact(self, name: str, timeout: float = 0.2, role: str = "", within: str = "", row_label: str = "", reject_roles=()) -> Found:
+        """Точное имя. Единственная подпись берётся даже если тип в сценарии другой."""
+        self.watcher.poll()
+        deadline = time.time() + timeout
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = exact_match(self.controls, name, role, within, row_label, reject_roles)
+            except (AmbiguousTarget, RejectedOnly):
+                raise
+            except LookupError:
+                chosen = None
+                note = ""
             if chosen is not None:
                 title = chosen["name"]
                 return Found(
@@ -711,6 +806,37 @@ class PywinautoSession:
                 raise
             except LookupError:
                 chosen = None
+            if chosen is not None:
+                left, top, right, bottom = chosen["box"]
+                return Found(
+                    name=chosen["name"],
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                    raw=chosen["raw"],
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                raise LookupError(name)
+            self._cache = None
+            time.sleep(0.45)
+
+    def find_exact(self, name: str, timeout: float = 8, role: str = "", within: str = "", row_label: str = "", reject_roles=()) -> Found:
+        """Точное имя на живом окне. Тип не запрещает единственную подходящую подпись."""
+        deadline = time.time() + timeout
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = exact_match(self._snapshot(), name, role, within, row_label, reject_roles)
+            except (AmbiguousTarget, RejectedOnly):
+                raise
+            except LookupError:
+                chosen = None
+                note = ""
             if chosen is not None:
                 left, top, right, bottom = chosen["box"]
                 return Found(

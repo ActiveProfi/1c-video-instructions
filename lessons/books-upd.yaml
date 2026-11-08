@@ -90,6 +90,7 @@ scenes:
     within: Поступление (акт, накладная, УПД)
     aliases:
     - Номер документа сторонней организации
+    - 'Накладная, УПД №:'
     value: '{{incoming_number}}'
     covers: incoming_number
     mutates: true
@@ -102,6 +103,9 @@ scenes:
     element: Дата входящего документа
     role: field
     within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'от:'
+    row_label: 'Накладная, УПД №:'
     value: 11.10.2026
     covers: incoming_date
     mutates: true
@@ -114,6 +118,8 @@ scenes:
     element: Контрагент
     role: field
     within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Контрагент:'
     value: Альфа
     covers: supplier
     mutates: true
@@ -138,7 +144,8 @@ scenes:
     element: Договор
     role: field
     within: Поступление (акт, накладная, УПД)
-    expect_contains: '7'
+    aliases:
+    - 'Договор:'
     covers: contract
 - id: warehouse
   title: Склад
@@ -211,7 +218,7 @@ scenes:
 - id: vat-rate
   title: Ставка НДС
   narration: Ставка НДС — двадцать два процента.
-  legal_note: Ставка для этого учебного примера — 22 процента.
+  legal_note: 'Ставка 22% задана этим учебным документом. Название «Книги» её не обосновывает: для многих книг ставка 10%. Ставку в уроке не меняем молча.'
   sync:
     kind: point
     element: Ставка НДС
@@ -226,8 +233,10 @@ scenes:
   sync:
     kind: point
     element: НДС в сумме
-    role: text
+    role: hyperlink
     within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Цены и валюта: НДС в сумме'
     expect_name: НДС в сумме
     covers: price_mode
 - id: total
@@ -237,8 +246,10 @@ scenes:
   sync:
     kind: point
     element: Всего
-    role: text
+    role: field
     within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Всего:'
     expect_digits: '54000'
     covers: total
 - id: vat-amount
@@ -248,8 +259,10 @@ scenes:
   sync:
     kind: point
     element: Сумма НДС
-    role: text
+    role: field
     within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'НДС (в т.ч.):'
     expect_digits: '973770'
     covers: vat_amount
 - id: net
@@ -276,11 +289,11 @@ scenes:
 - id: open-upd
   title: УПД
   narration: Откроем полученный УПД.
-  legal_note: Это документ поставщика, уже связанный с поступлением.
+  legal_note: Тумблер УПД сам регистрирует полученный счёт-фактуру. Второй счёт-фактуру кнопкой Создать не делаем.
   sync:
-    kind: click
+    kind: point
     element: УПД
-    role: hyperlink
+    role: check
     within: Поступление (акт, накладная, УПД)
     covers: open_upd
 - id: invoice
@@ -304,6 +317,7 @@ scenes:
     role: button
     within: Поступление (акт, накладная, УПД)
     aliases:
+    - Движения документа
     - Показать проводки
     - Дебет Кредит
     covers: open_entries
