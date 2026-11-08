@@ -17,7 +17,7 @@ from pathlib import Path
 from pipeline.postprod import write_srt
 from pipeline.pronunciation import strip_stress
 from pipeline.tts import read_dotenv, speak_clip, speech_cache_file
-from pipeline.ui_session import AmbiguousTarget, guard_name
+from pipeline.ui_session import AmbiguousTarget, ParentMismatch, RoleMismatch, guard_name
 
 LILY_VOICE = "pFZP5JQG7iQjIQuC4Bku"
 LILY_MODEL = "eleven_multilingual_v2"
@@ -196,11 +196,14 @@ def beats_from_lesson(lesson: dict) -> list[dict]:
                 "expect_digits": str(sync.get("expect_digits") or ""),
                 "expect_name": str(sync.get("expect_name") or ""),
                 "require_filled": bool(sync.get("require_filled")),
+                "required_now": bool(sync.get("required_now")),
                 "rescan_after": bool(sync.get("rescan_after")),
                 "mutates": bool(sync.get("mutates")),
                 "uses_number": PLACEHOLDER in narration or PLACEHOLDER in str(sync.get("value") or ""),
             }
         )
+    if not beats or not beats[0]["required_now"]:
+        raise ValueError("Первый шаг должен быть виден до записи: у него нужен required_now.")
     covers = {beat["covers"] for beat in beats}
     missing = [name for name in REQUIRED_COVERS if name not in covers]
     if missing:
@@ -318,6 +321,20 @@ def _find_strict(session, beat: dict, timeout: float):
                 f"Подпись «{name}» встречается {error.count} раз. Рамка не ставится наугад.",
                 beat["id"],
             ) from error
+        except RoleMismatch as error:
+            raise TargetError(
+                "missing",
+                name,
+                f"Подпись «{name}» есть на экране, тип «{', '.join(error.roles)}». Урок ищет «{beat.get('role') or error.wanted}».",
+                beat["id"],
+            ) from error
+        except ParentMismatch as error:
+            raise TargetError(
+                "missing",
+                name,
+                f"Подпись «{name}» есть на экране, но не внутри «{error.within}».",
+                beat["id"],
+            ) from error
         except LookupError as error:
             last = error
     raise TargetError("missing", beat["element"], f"На экране нет «{beat['element']}».", beat["id"]) from last
@@ -374,6 +391,7 @@ def preflight_synced(session, lesson: dict, now: datetime | None = None) -> dict
     ambiguous = []
     missing = []
     mismatches = []
+    blocking = []
     for beat in beats:
         row = {
             "step": beat["id"],
@@ -396,19 +414,24 @@ def preflight_synced(session, lesson: dict, now: datetime | None = None) -> dict
                 except TargetError as error:
                     row["found"] = False
                     row["note"] = str(error)
-                    mismatches.append(beat["element"])
+                    if beat.get("required_now"):
+                        blocking.append(beat["element"])
+                    else:
+                        mismatches.append(beat["element"])
         except TargetError as error:
             row["found"] = False
             row["ambiguous"] = error.kind == "ambiguous"
             row["note"] = str(error)
-            if error.kind == "ambiguous":
+            if beat.get("required_now"):
+                blocking.append(beat["element"])
+            elif error.kind == "ambiguous":
                 ambiguous.append(beat["element"])
             elif error.kind in ("mismatch", "empty"):
                 mismatches.append(beat["element"])
             else:
                 missing.append(beat["element"])
         rows.append(row)
-    status = "blocked" if ambiguous or mismatches else "preflight"
+    status = "blocked" if blocking or ambiguous or mismatches else "preflight"
     return {
         "status": status,
         "mode": "synced-preflight",
@@ -425,11 +448,13 @@ def preflight_synced(session, lesson: dict, now: datetime | None = None) -> dict
         "scan": "visible_window_only",
         "ambiguous": ambiguous,
         "mismatches": mismatches,
+        "blocking": blocking,
         "missing_on_this_screen": missing,
         "steps": rows,
         "note": (
-            "Пробный прогон только читает экран. Поля документа появятся после открытия формы, "
-            "поэтому их отсутствие на начальной странице ожидаемо. Повторяющаяся подпись останавливает прогон. "
+            "Пробный прогон только читает экран. Первый шаг, раздел Покупки, обязан быть виден: "
+            "без него прогон неуспешен. Остальные поля документа на начальной странице могут отсутствовать. "
+            "Повторяющаяся подпись останавливает прогон. Озвучка на пробном прогоне не запускается. "
             "База не восстанавливается, старые документы не открываются и не удаляются."
         ),
     }
@@ -499,6 +524,18 @@ def perform_synced(
     number = allocate_incoming_number(seen, moment)
     voice_dir = out_dir / "voice"
     ready: dict[str, tuple[float, bool, str]] = {}
+    try:
+        for beat in beats:
+            if beat.get("required_now"):
+                _find_strict(session, beat, timeout)
+    except TargetError as error:
+        report = _failure(None, error, number, seen, False, False, [])
+        report["message"] = str(error) + " Озвучка не запускалась. Документы не создавались."
+        _write(out_dir / "audit.json", report)
+        _write(out_dir / "errors.json", [report["error"]])
+        _write(out_dir / "coverage.json", [])
+        _write(out_dir / "timing-report.json", {"synced": False, "max_drift_seconds": 0.0, "beats": []})
+        return report
     for beat in beats:
         if beat["uses_number"]:
             continue

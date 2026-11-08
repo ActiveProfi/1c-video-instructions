@@ -86,11 +86,25 @@ ROLE_ALIASES = {
     "надпись": "text",
 }
 
+# Точные типы из Inspect-1C. Короткие слова здесь не ищутся как подстрока:
+# иначе ControlType.Table совпал бы с вкладкой из-за «tab».
+EXACT_ROLES = {
+    "tab": "tab",
+    "tabitem": "tab",
+    "dataitem": "cell",
+    "checkbox": "check",
+    "radiobutton": "check",
+    "header": "header",
+    "headeritem": "header",
+}
+
 
 def canonical_role(control_type: str) -> str:
     value = norm(control_type).replace("controltype.", "")
     if not value:
         return ""
+    if value in EXACT_ROLES:
+        return EXACT_ROLES[value]
     if value in ROLE_ALIASES:
         return ROLE_ALIASES[value]
     for alias, role in ROLE_ALIASES.items():
@@ -228,6 +242,25 @@ class AmbiguousTarget(LookupError):
         self.note = note
 
 
+class RoleMismatch(LookupError):
+    """Подпись на экране есть, но тип элемента другой. Это не «элемента нет»."""
+
+    def __init__(self, name: str, roles: list[str], wanted: str) -> None:
+        super().__init__(name)
+        self.name = name
+        self.roles = list(roles)
+        self.wanted = wanted
+
+
+class ParentMismatch(LookupError):
+    """Подпись есть, но не в том родительском элементе, который указан в уроке."""
+
+    def __init__(self, name: str, within: str) -> None:
+        super().__init__(name)
+        self.name = name
+        self.within = within
+
+
 def unique_match(candidates: list[dict], name: str, role: str = "", within: str = ""):
     """Один элемент. Ноль совпадений — LookupError. Больше одного — AmbiguousTarget.
 
@@ -256,7 +289,8 @@ def unique_match(candidates: list[dict], name: str, role: str = "", within: str 
     if wanted_role:
         by_role = [item for item in pool if item.get("role") == wanted_role]
         if not by_role:
-            raise LookupError(name)
+            seen = sorted({str(item.get("role") or "без типа") for item in pool})
+            raise RoleMismatch(name, seen, wanted_role)
         pool = by_role
         notes.append(f"тип {wanted_role}")
     if within:
@@ -266,7 +300,7 @@ def unique_match(candidates: list[dict], name: str, role: str = "", within: str 
             if any(parent_token in norm(parent) for parent in item.get("parents") or [])
         ]
         if not by_parent:
-            raise LookupError(name)
+            raise ParentMismatch(name, within)
         pool = by_parent
         notes.append(f"внутри «{within}»")
     visible = [item for item in pool if item.get("visible", True)]
@@ -444,14 +478,12 @@ class FakeSession:
         """Один видимый элемент. Похожие подписи не склеиваются в «первый попавшийся»."""
         self.watcher.poll()
         deadline = time.time() + timeout
-        last_ambiguous = None
         while True:
             self.watcher.poll()
             try:
                 chosen, note = unique_match(self.controls, name, role, within)
-            except AmbiguousTarget as error:
-                chosen = None
-                last_ambiguous = error
+            except (AmbiguousTarget, RoleMismatch, ParentMismatch):
+                raise
             except LookupError:
                 chosen = None
             if chosen is not None:
@@ -469,8 +501,6 @@ class FakeSession:
                     note=note,
                 )
             if time.time() >= deadline:
-                if last_ambiguous is not None:
-                    raise last_ambiguous
                 raise LookupError(name)
             time.sleep(0.01)
 
@@ -673,14 +703,12 @@ class PywinautoSession:
     def find_unique(self, name: str, timeout: float = 8, role: str = "", within: str = "") -> Found:
         """Один элемент. Если подпись повторяется, поиск останавливается, а не берёт первый."""
         deadline = time.time() + timeout
-        last_ambiguous = None
         while True:
             self.watcher.poll()
             try:
                 chosen, note = unique_match(self._snapshot(), name, role, within)
-            except AmbiguousTarget as error:
-                chosen = None
-                last_ambiguous = error
+            except (AmbiguousTarget, RoleMismatch, ParentMismatch):
+                raise
             except LookupError:
                 chosen = None
             if chosen is not None:
@@ -698,8 +726,6 @@ class PywinautoSession:
                     note=note,
                 )
             if time.time() >= deadline:
-                if last_ambiguous is not None:
-                    raise last_ambiguous
                 raise LookupError(name)
             self._cache = None
             time.sleep(0.45)

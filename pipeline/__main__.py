@@ -64,6 +64,8 @@ def _live(root: Path, args) -> int:
                 f"Новый номер, если запись начнётся сейчас: {report.get('incoming_number_preview') or '—'}.",
                 flush=True,
             )
+            for name in report.get("blocking") or []:
+                print(f"Стартовый шаг не найден, запись нельзя начинать: {name}", flush=True)
             for name in report.get("ambiguous") or []:
                 print(f"Подпись повторяется, запись нельзя начинать: {name}", flush=True)
             for name in report.get("mismatches") or []:

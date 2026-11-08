@@ -210,7 +210,7 @@ py -3 -m pipeline live --lesson "lessons\books-upd.yaml" --dry-run --confirm-tra
 py -3 -m pipeline live --lesson "lessons\books-upd.yaml" --confirm-training-copy --tts elevenlabs --voice pFZP5JQG7iQjIQuC4Bku
 ```
 
-Каждый запуск создаёт свою папку `artifacts\books-upd\дата-время`. Там `lesson.mp4`, субтитры, `audit.json`, `coverage.json`, `timing-report.json` и `errors.json`. Номер УПД будет новым. `УЧ-КНИГИ-001` и `УЧ-КНИГИ-002` повторно не создаются. База не восстанавливается, старые документы не удаляются. Если нужная подпись не одна, запись останавливается.
+Каждый запуск создаёт свою папку `artifacts\books-upd\дата-время`. Там `lesson.mp4`, субтитры, `audit.json`, `coverage.json`, `timing-report.json` и `errors.json`. Номер УПД будет новым. `УЧ-КНИГИ-001` и `УЧ-КНИГИ-002` повторно не создаются. База не восстанавливается, старые документы не удаляются. Пробный прогон успешен только если на экране есть вкладка «Покупки». Если её нет, код выхода 2 и озвучка не запрашивается. Если нужная подпись не одна, запись останавливается.
 
 ## Журнал разработки
 

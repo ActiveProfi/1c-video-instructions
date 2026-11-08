@@ -25,21 +25,21 @@ scenes:
 - id: open-purchases
   title: Покупки
   narration: Откроем раздел Покупки.
-  legal_note: Полный интерфейс Такси, раздел слева.
+  legal_note: В Такси это вкладка слева, ControlType.TabItem, не пункт меню.
   sync:
     kind: click
     element: Покупки
-    role: menu
+    role: tab
+    required_now: true
     covers: navigation
 - id: open-list
   title: Список поступлений
   narration: Откроем список поступлений.
-  legal_note: Журнал только для чтения, старые строки не открываем.
+  legal_note: Журнал только для чтения, старые строки не открываем. Вкладка раздела не является родителем этой ссылки.
   sync:
     kind: click
     element: Поступление (акты, накладные, УПД)
     role: hyperlink
-    within: Покупки
     aliases:
     - Поступление товаров
     covers: list
@@ -47,7 +47,7 @@ scenes:
 - id: open-create
   title: Новое поступление
   narration: Создадим новое поступление.
-  legal_note: Это новый документ, не копия уже проведённого.
+  legal_note: Кнопка или SplitButton. Это новый документ, не копия уже проведённого.
   sync:
     kind: click
     element: Поступление
@@ -59,7 +59,7 @@ scenes:
 - id: choose-goods
   title: Товары
   narration: Выберем товары, накладная, УПД.
-  legal_note: Нужна товарная накладная, не услуги.
+  legal_note: Пункт меню создания, ControlType.MenuItem. Нужна товарная накладная, не услуги.
   sync:
     kind: click
     element: 'Товары: накладная, УПД'
@@ -110,7 +110,7 @@ scenes:
 - id: supplier-pick
   title: Выбор поставщика
   narration: Выберем ООО Альфа из списка.
-  legal_note: Если подходящих строк несколько, запись остановится.
+  legal_note: Строка выпадающего списка, ControlType.ListItem. Если строк несколько, запись остановится.
   sync:
     kind: click
     element: 'ООО "Альфа"'
@@ -167,7 +167,7 @@ scenes:
 - id: item-pick
   title: Выбор книг
   narration: Выберем номенклатуру Книги.
-  legal_note: В списке должна быть одна подходящая строка.
+  legal_note: Строка выпадающего списка, ControlType.ListItem. В списке должна быть одна подходящая строка.
   sync:
     kind: click
     element: Книги

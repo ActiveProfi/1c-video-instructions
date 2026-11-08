@@ -9,7 +9,7 @@ from pathlib import Path
 from pipeline import books_sync, live, tts
 from pipeline.lesson_yaml import load_lesson
 from pipeline.pronunciation import pronounce
-from pipeline.ui_session import FakeSession, canonical_role
+from pipeline.ui_session import FakeSession, RoleMismatch, canonical_role, unique_match
 from pipeline.__main__ import main
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -480,6 +480,168 @@ class VoiceAndAssemblyTest(unittest.TestCase):
         script = (ROOT / "tools" / "Build-BooksCreation.ps1").read_text(encoding="utf-8")
         self.assertIn("books-upd.yaml", script)
         self.assertIn("-Legacy", script)
+
+
+class TabItemPreflightTest(unittest.TestCase):
+    """Регрессия прогона 2026-11-08: вкладка Покупки и ложный успех пробного прогона."""
+
+    UIA_BY_STEP = {
+        "open-purchases": "ControlType.TabItem",
+        "open-list": "ControlType.Hyperlink",
+        "open-create": "ControlType.Button",
+        "choose-goods": "ControlType.MenuItem",
+        "incoming-number": "ControlType.Edit",
+        "incoming-date": "ControlType.Edit",
+        "supplier-type": "ControlType.ComboBox",
+        "supplier-pick": "ControlType.ListItem",
+        "contract": "ControlType.ComboBox",
+        "warehouse": "ControlType.ComboBox",
+        "add-row": "ControlType.Button",
+        "item-type": "ControlType.ComboBox",
+        "item-pick": "ControlType.ListItem",
+        "quantity": "ControlType.Edit",
+        "price": "ControlType.Edit",
+        "vat-rate": "ControlType.Edit",
+        "price-mode": "ControlType.Text",
+        "total": "ControlType.Text",
+        "vat-amount": "ControlType.Text",
+        "net": "ControlType.Text",
+        "post": "ControlType.Button",
+        "open-upd": "ControlType.Hyperlink",
+        "invoice": "ControlType.Text",
+        "open-entries": "ControlType.Button",
+        "entries": "ControlType.Text",
+        "entries-vat": "ControlType.Text",
+        "open-invoice-entries": "ControlType.Button",
+        "invoice-entries": "ControlType.Text",
+    }
+
+    def test_every_locator_matches_a_uia_type_the_executor_understands(self):
+        beats = books_sync.beats_from_lesson(load_lesson(LESSON_PATH))
+        self.assertTrue(beats[0]["required_now"])
+        self.assertEqual(beats[0]["role"], "tab")
+        self.assertEqual(canonical_role("ControlType.TabItem"), "tab")
+        self.assertNotEqual(canonical_role("ControlType.TabItem"), "menu")
+        self.assertEqual(canonical_role("ControlType.SplitButton"), "button")
+        self.assertEqual(canonical_role("ControlType.DataItem"), "cell")
+        self.assertEqual(canonical_role("ControlType.CheckBox"), "check")
+        self.assertEqual(canonical_role("ControlType.RadioButton"), "check")
+        self.assertEqual(canonical_role("ControlType.Table"), "other")
+        seen = set()
+        for beat in beats:
+            seen.add(beat["id"])
+            expected = self.UIA_BY_STEP[beat["id"]]
+            self.assertEqual(canonical_role(expected), canonical_role(beat["role"]), beat["id"])
+            if beat["role"] == "menu":
+                self.assertNotEqual(canonical_role(beat["element"]), "tab")
+        self.assertEqual(seen, set(self.UIA_BY_STEP))
+
+    def test_tabitem_section_is_found_and_a_text_namesake_does_not_make_it_ambiguous(self):
+        chosen, _note = unique_match(
+            [
+                {"name": "Покупки", "role": canonical_role("ControlType.TabItem"), "parents": [], "visible": True},
+                {"name": "Покупки", "role": canonical_role("ControlType.Text"), "parents": [], "visible": True},
+            ],
+            "Покупки",
+            role="tab",
+        )
+        self.assertEqual(chosen["role"], "tab")
+        with self.assertRaises(RoleMismatch) as caught:
+            unique_match(
+                [{"name": "Покупки", "role": canonical_role("ControlType.TabItem"), "parents": [], "visible": True}],
+                "Покупки",
+                role="menu",
+            )
+        self.assertEqual(caught.exception.roles, ["tab"])
+
+    def test_missing_start_tab_blocks_preflight_instead_of_a_false_success(self):
+        lesson = load_lesson(LESSON_PATH)
+        home = FakeSession(
+            [
+                {"name": "Альфа ООО", "role": "text", "visible": True, "value": "Альфа ООО"},
+                {"name": "Главное", "role": "ControlType.TabItem", "visible": True},
+            ],
+            texts=["Альфа ООО"],
+        )
+        blocked = books_sync.preflight_synced(home, lesson, now=WHEN)
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertEqual(books_sync.preflight_exit_code(blocked), 2)
+        self.assertIn("Покупки", blocked["blocking"])
+        self.assertNotIn("Покупки", blocked["missing_on_this_screen"])
+        self.assertGreater(len(blocked["missing_on_this_screen"]), 0)
+        self.assertEqual(home.clicks, [])
+
+        visible = FakeSession(
+            [
+                {"name": "Альфа ООО", "role": "text", "visible": True, "value": "Альфа ООО"},
+                {"name": "Покупки", "role": "ControlType.TabItem", "visible": True, "left": 12, "top": 20, "right": 90, "bottom": 48},
+                {"name": "Покупки", "role": "ControlType.Text", "visible": True},
+            ],
+            texts=["Альфа ООО"],
+        )
+        ready = books_sync.preflight_synced(visible, lesson, now=WHEN)
+        self.assertEqual(ready["status"], "preflight")
+        self.assertEqual(ready["blocking"], [])
+        self.assertNotIn("Покупки", ready["missing_on_this_screen"])
+        self.assertTrue(ready["steps"][0]["found"])
+        self.assertIn("Поступление (акты, накладные, УПД)", ready["missing_on_this_screen"])
+
+    def test_recording_does_not_speak_until_the_start_tab_is_confirmed(self):
+        lesson = load_lesson(LESSON_PATH)
+        spoken = []
+
+        def speak(text, dest):
+            spoken.append(text)
+            return silence(dest)
+
+        class Grab:
+            def __init__(self):
+                self.started = False
+
+            def start(self, rect, path):
+                self.started = True
+
+            def stop(self):
+                return ""
+
+        session = FakeSession(
+            [
+                {"name": "Альфа ООО", "role": "text", "visible": True, "value": "Альфа ООО"},
+                {"name": "Покупки", "role": "menu", "visible": True},
+            ],
+            texts=["Альфа ООО"],
+        )
+        grab = Grab()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            cache = books_sync._cache_dir(root, "offline", "lily")
+            cache.mkdir(parents=True)
+            marker = cache / "already-paid.wav"
+            payload = b"R" * 500
+            marker.write_bytes(payload)
+            report = books_sync.perform_synced(
+                session,
+                lesson,
+                root / "out",
+                root,
+                "offline",
+                "lily",
+                clock=books_sync.Clock(),
+                speak=speak,
+                grab=grab,
+                now=WHEN,
+                timeout=0.05,
+            )
+            self.assertEqual(marker.read_bytes(), payload)
+        self.assertEqual(spoken, [])
+        self.assertFalse(grab.started)
+        self.assertEqual(report["beats"], [])
+        self.assertFalse(report["recorded"])
+        self.assertFalse(report["filled"])
+        self.assertFalse(report["posted"])
+        self.assertFalse(report["document_modified"])
+        self.assertIn("tab", report["message"])
+        self.assertIn("menu", report["message"])
 
 
 if __name__ == "__main__":
