@@ -1,0 +1,365 @@
+schema_version: 1
+lesson: books-upd
+recording: synced
+title: 'Поступление книг по УПД'
+card_title: 'Урок: поступление книг по УПД'
+configuration: Бухгалтерия предприятия, редакция 3.0
+interface: Такси
+organization: Альфа ООО
+tts: elevenlabs
+voice: pFZP5JQG7iQjIQuC4Bku
+tts_model: eleven_multilingual_v2
+goal: 'Создать новое поступление книг по УПД в учебной базе и показать договор, ставку НДС, сумму НДС, итог, счёт-фактуру и проводки.'
+intro_narration: 'Сейчас в 1С:Бухгалтерии, редакция 3.0, создадим новое поступление книг по УПД и сразу посмотрим проводки. Организация — Альфа, база учебная.'
+outro_narration: 'Новое поступление проведено, счёт-фактура и проводки проверены. Прежние документы мы не открывали и не меняли.'
+# Типы ниже сняты с живого окна. Остальные роли шагов — предположение, пока нет снимка той формы.
+uia_observed:
+  open-purchases:
+    type: ControlType.TabItem
+    name: Покупки
+    note: Панель разделов, узел 63 снимка 2026-11-08.
+  open-list:
+    type: ControlType.MenuItem
+    name: Поступление (акты, накладные, УПД)
+    within: Покупки
+    note: Меню функций, узел 93, родитель — группа Покупки, узел 84. Это не Hyperlink.
+document_policy:
+  reserved_numbers:
+  - УЧ-КНИГИ-001
+  - УЧ-КНИГИ-002
+  scan: visible_window_only
+  never:
+  - restore_database
+  - delete_documents
+  - edit_existing_documents
+scenes:
+- id: open-purchases
+  title: Покупки
+  narration: Откроем раздел Покупки.
+  legal_note: В Такси это вкладка слева, ControlType.TabItem, не пункт меню.
+  sync:
+    kind: click
+    element: Покупки
+    role: tab
+    required_now: true
+    covers: navigation
+- id: open-list
+  title: Список поступлений
+  narration: Откроем список поступлений.
+  legal_note: Журнал только для чтения. В меню функций это пункт меню внутри группы Покупки, не гиперссылка.
+  sync:
+    kind: click
+    element: Поступление (акты, накладные, УПД)
+    role: menu
+    within: Покупки
+    covers: list
+    rescan_after: true
+- id: open-create
+  title: Новое поступление
+  narration: Создадим новое поступление.
+  legal_note: Тип кнопки на форме журнала ещё не снят. Это предположение. Новый документ, не копия уже проведённого.
+  sync:
+    kind: click
+    element: Поступление
+    role: button
+    aliases:
+    - Создать
+    covers: create
+    mutates: true
+- id: choose-goods
+  title: Товары
+  narration: Выберем товары, накладная, УПД.
+  legal_note: Тип пункта на форме создания ещё не снят. Это предположение. Нужна товарная накладная, не услуги.
+  sync:
+    kind: click
+    element: 'Товары: накладная, УПД'
+    role: menu
+    aliases:
+    - Товары (накладная, УПД)
+    - Товары
+    covers: goods
+    mutates: true
+- id: incoming-number
+  title: Входящий номер
+  narration: 'Входящий номер — {{incoming_number}}.'
+  legal_note: Номер новый. УЧ-КНИГИ-001 и УЧ-КНИГИ-002 не записываем снова.
+  sync:
+    kind: fill
+    element: Номер входящего документа
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - Номер документа сторонней организации
+    - 'Накладная, УПД №:'
+    value: '{{incoming_number}}'
+    covers: incoming_number
+    mutates: true
+- id: incoming-date
+  title: Дата УПД
+  narration: Дата документа поставщика — одиннадцатое октября две тысячи двадцать шестого года.
+  legal_note: Дата берётся из УПД поставщика.
+  sync:
+    kind: fill
+    element: Дата входящего документа
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'от:'
+    row_label: 'Накладная, УПД №:'
+    value: 11.10.2026
+    covers: incoming_date
+    mutates: true
+- id: supplier-type
+  title: Поставщик
+  narration: Укажем поставщика Альфа.
+  legal_note: Карточку контрагента не меняем, только выбираем её в новом документе.
+  sync:
+    kind: fill
+    element: Контрагент
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Контрагент:'
+    value: Альфа
+    covers: supplier
+    mutates: true
+- id: supplier-pick
+  title: Выбор поставщика
+  narration: Выберем ООО Альфа из списка.
+  legal_note: Тип строки выбора поставщика ещё не снят. Это предположение. Если строк несколько, запись остановится.
+  sync:
+    kind: click
+    element: 'ООО "Альфа"'
+    role: menu
+    aliases:
+    - ООО «Альфа»
+    covers: supplier_pick
+    mutates: true
+- id: contract
+  title: Договор
+  narration: Договор — семь от первого апреля.
+  legal_note: Договор уже есть у поставщика. Его карточку не переписываем.
+  sync:
+    kind: point
+    element: Договор
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Договор:'
+    covers: contract
+- id: warehouse
+  title: Склад
+  narration: Склад оставляем тот, что уже стоит в документе.
+  legal_note: Пустой склад сам не заполняем, чтобы не выбрать чужой.
+  sync:
+    kind: point
+    element: Склад
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    require_filled: true
+    covers: warehouse
+- id: add-row
+  title: Строка товара
+  narration: Добавим строку товара.
+  legal_note: Одна учебная строка с книгами.
+  sync:
+    kind: click
+    element: Добавить
+    role: button
+    within: Товары
+    covers: add_row
+    mutates: true
+- id: item-type
+  title: Номенклатура
+  narration: Номенклатура — книги.
+  legal_note: Единицу упаковка у существующего товара не меняем.
+  sync:
+    kind: fill
+    element: Номенклатура
+    role: field
+    within: Товары
+    value: Книги
+    covers: item
+    mutates: true
+- id: item-pick
+  title: Выбор книг
+  narration: Выберем номенклатуру Книги.
+  legal_note: Тип строки выбора номенклатуры ещё не снят. Это предположение. В списке должна быть одна подходящая строка.
+  sync:
+    kind: click
+    element: Книги
+    role: menu
+    covers: item_pick
+    mutates: true
+- id: quantity
+  title: Количество
+  narration: Количество — четыре упаковки.
+  legal_note: Четыре упаковки, как в учебном УПД.
+  sync:
+    kind: fill
+    element: Количество
+    role: field
+    within: Товары
+    value: '4'
+    covers: quantity
+    mutates: true
+- id: price
+  title: Цена
+  narration: Цена — тринадцать тысяч пятьсот рублей, уже с налогом.
+  legal_note: Цена включает НДС 22 процента.
+  sync:
+    kind: fill
+    element: Цена
+    role: field
+    within: Товары
+    value: '13500'
+    covers: price
+    mutates: true
+- id: vat-rate
+  title: Ставка НДС
+  narration: Ставка НДС — двадцать два процента.
+  legal_note: 'Ставка 22% задана этим учебным документом. Название «Книги» её не обосновывает: для многих книг ставка 10%. Ставку в уроке не меняем молча.'
+  sync:
+    kind: point
+    element: Ставка НДС
+    role: field
+    within: Товары
+    expect_contains: '22'
+    covers: vat_rate
+- id: price-mode
+  title: НДС в сумме
+  narration: Налог уже в сумме, не сверху.
+  legal_note: Режим цены — НДС в сумме. Сверху налог не начисляем.
+  sync:
+    kind: point
+    element: НДС в сумме
+    role: hyperlink
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Цены и валюта: НДС в сумме'
+    expect_name: НДС в сумме
+    covers: price_mode
+- id: total
+  title: Итог
+  narration: Всего — пятьдесят четыре тысячи рублей.
+  legal_note: 4 умножить на 13500 равно 54000.
+  sync:
+    kind: point
+    element: Всего
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'Всего:'
+    expect_digits: '54000'
+    covers: total
+- id: vat-amount
+  title: Сумма НДС
+  narration: В том числе НДС — девять тысяч семьсот тридцать семь рублей семьдесят копеек.
+  legal_note: 54000 умножить на 22 и разделить на 122.
+  sync:
+    kind: point
+    element: Сумма НДС
+    role: field
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - 'НДС (в т.ч.):'
+    expect_digits: '973770'
+    covers: vat_amount
+- id: net
+  title: Сумма без НДС
+  narration: Без налога — сорок четыре тысячи двести шестьдесят два рубля тридцать копеек.
+  legal_note: 54000 минус 9737 рублей 70 копеек.
+  sync:
+    kind: point
+    element: Сумма без НДС
+    role: text
+    within: Поступление (акт, накладная, УПД)
+    expect_digits: '4426230'
+    covers: net
+- id: post
+  title: Провести
+  narration: Проведём поступление.
+  legal_note: Проводится только новый учебный документ.
+  sync:
+    kind: click
+    element: Провести
+    role: button
+    covers: post
+    mutates: true
+- id: open-upd
+  title: УПД
+  narration: Откроем полученный УПД.
+  legal_note: Тумблер УПД сам регистрирует полученный счёт-фактуру. Второй счёт-фактуру кнопкой Создать не делаем.
+  sync:
+    kind: point
+    element: УПД
+    role: check
+    within: Поступление (акт, накладная, УПД)
+    covers: open_upd
+- id: invoice
+  title: Счёт-фактура
+  narration: Проверим номер и суммы счёта-фактуры.
+  legal_note: Второй счёт-фактуру не создаём, если связь уже есть.
+  sync:
+    kind: point
+    element: Счет-фактура полученный
+    role: text
+    aliases:
+    - Счёт-фактура полученный
+    covers: invoice
+- id: open-entries
+  title: Проводки поступления
+  narration: Откроем проводки поступления.
+  legal_note: Смотрим фактические движения этого документа.
+  sync:
+    kind: click
+    element: Дт/Кт
+    role: button
+    within: Поступление (акт, накладная, УПД)
+    aliases:
+    - Движения документа
+    - Показать проводки
+    - Дебет Кредит
+    covers: open_entries
+- id: entries
+  title: Книги на 41 счёте
+  narration: 'Книги без налога: дебет сорок один ноль один, кредит шестьдесят ноль один.'
+  legal_note: Сумма без НДС — 44262 рубля 30 копеек.
+  sync:
+    kind: point
+    element: '41.01'
+    role: text
+    expect_contains: '41.01'
+    covers: entries
+- id: entries-vat
+  title: Входной НДС
+  narration: 'Входной НДС: дебет девятнадцать ноль три, кредит шестьдесят ноль один.'
+  legal_note: Сумма НДС — 9737 рублей 70 копеек.
+  sync:
+    kind: point
+    element: '19.03'
+    role: text
+    expect_contains: '19.03'
+    covers: entries_vat
+- id: open-invoice-entries
+  title: Проводки счёта-фактуры
+  narration: Откроем проводки счёта-фактуры.
+  legal_note: Вычет смотрим в движениях счёта-фактуры.
+  sync:
+    kind: click
+    element: Дт/Кт
+    role: button
+    within: Счет-фактура полученный
+    aliases:
+    - Показать проводки
+    covers: open_invoice_entries
+- id: invoice-entries
+  title: Вычет НДС
+  narration: 'Вычет НДС: дебет шестьдесят восемь ноль два, кредит девятнадцать ноль три.'
+  legal_note: Проводка вычета читается из движений счёта-фактуры.
+  sync:
+    kind: point
+    element: '68.02'
+    role: text
+    expect_contains: '68.02'
+    covers: invoice_entries

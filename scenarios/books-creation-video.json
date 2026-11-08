@@ -1,4 +1,6 @@
 ﻿{
+  "legacy_montage": true,
+  "note": "Старый монтаж уже снятых кадров из artifacts/books-creation. Для новой синхронной записи используйте lessons/books-upd.yaml и команду python -m pipeline live. Этот файл документы не создаёт.",
   "voice": "pFZP5JQG7iQjIQuC4Bku",
   "voice_provider": "elevenlabs",
   "audio_directory": "neural-voice/pFZP5JQG7iQjIQuC4Bku",

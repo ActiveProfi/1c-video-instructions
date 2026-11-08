@@ -86,11 +86,26 @@ ROLE_ALIASES = {
     "надпись": "text",
 }
 
+# Точные типы из Inspect-1C. Короткие слова здесь не ищутся как подстрока:
+# иначе ControlType.Table совпал бы с вкладкой из-за «tab».
+EXACT_ROLES = {
+    "tab": "tab",
+    "tabitem": "tab",
+    "dataitem": "cell",
+    "check": "check",
+    "checkbox": "check",
+    "radiobutton": "check",
+    "header": "header",
+    "headeritem": "header",
+}
+
 
 def canonical_role(control_type: str) -> str:
     value = norm(control_type).replace("controltype.", "")
     if not value:
         return ""
+    if value in EXACT_ROLES:
+        return EXACT_ROLES[value]
     if value in ROLE_ALIASES:
         return ROLE_ALIASES[value]
     for alias, role in ROLE_ALIASES.items():
@@ -218,6 +233,149 @@ def choose_match(candidates: list[dict], name: str, role: str = "", within: str 
     return chosen, "; ".join(notes), several
 
 
+class AmbiguousTarget(LookupError):
+    """После фильтров осталось несколько элементов. Первый из списка не выбираем."""
+
+    def __init__(self, name: str, count: int, note: str = "") -> None:
+        super().__init__(name)
+        self.name = name
+        self.count = count
+        self.note = note
+
+
+class RoleMismatch(LookupError):
+    """Подпись на экране есть, но тип элемента другой. Это не «элемента нет»."""
+
+    def __init__(self, name: str, roles: list[str], wanted: str) -> None:
+        super().__init__(name)
+        self.name = name
+        self.roles = list(roles)
+        self.wanted = wanted
+
+
+class RejectedOnly(LookupError):
+    """Подпись есть только у контрола, который для этого шага опасен, например вкладка раздела."""
+
+
+class ParentMismatch(LookupError):
+    """Подпись есть, но не в том родительском элементе, который указан в уроке."""
+
+    def __init__(self, name: str, within: str) -> None:
+        super().__init__(name)
+        self.name = name
+        self.within = within
+
+
+def unique_match(candidates: list[dict], name: str, role: str = "", within: str = ""):
+    """Один элемент. Ноль совпадений — LookupError. Больше одного — AmbiguousTarget.
+
+    Номер в списке здесь не используется: выбрать «первый из похожих» значило бы
+    подставить неточную рамку.
+    """
+    wanted = norm(name)
+
+    def matches(item) -> bool:
+        for value in text_variants(item):
+            folded = norm(value)
+            if folded == wanted or wanted in folded:
+                return True
+        return False
+
+    def exact(item) -> bool:
+        return any(norm(value) == wanted for value in text_variants(item))
+
+    named = [item for item in candidates if matches(item)]
+    if not named:
+        raise LookupError(name)
+    exact_items = [item for item in named if exact(item)]
+    pool = exact_items or named
+    notes = []
+    wanted_role = canonical_role(role) if role else ""
+    if wanted_role:
+        by_role = [item for item in pool if item.get("role") == wanted_role]
+        if not by_role:
+            seen = sorted({str(item.get("role") or "без типа") for item in pool})
+            raise RoleMismatch(name, seen, wanted_role)
+        pool = by_role
+        notes.append(f"тип {wanted_role}")
+    if within:
+        parent_token = norm(within)
+        by_parent = [
+            item for item in pool
+            if any(parent_token in norm(parent) for parent in item.get("parents") or [])
+        ]
+        if not by_parent:
+            raise ParentMismatch(name, within)
+        pool = by_parent
+        notes.append(f"внутри «{within}»")
+    visible = [item for item in pool if item.get("visible", True)]
+    if not visible:
+        raise LookupError(name)
+    pool = visible
+    if len(pool) != 1:
+        raise AmbiguousTarget(name, len(pool), "; ".join(notes))
+    return pool[0], "; ".join(notes)
+
+
+def _center_y(item) -> float:
+    if item.get("box"):
+        return (item["box"][1] + item["box"][3]) / 2
+    return (int(item.get("top", 0)) + int(item.get("bottom", 0))) / 2
+
+
+def exact_named(candidates: list[dict], name: str) -> list[dict]:
+    """Только полное совпадение подписи. «Поступление» не цепляет более длинные пункты."""
+    wanted = norm(name)
+    found = []
+    for item in candidates:
+        if not item.get("visible", True):
+            continue
+        if any(norm(value) == wanted for value in text_variants(item)):
+            found.append(item)
+    return found
+
+
+def exact_match(candidates: list[dict], name: str, role: str = "", within: str = "", row_label: str = "", reject_roles=()):
+    """Как tools/Run-LessonPlan.ps1: одно точное имя. Тип сужает только когда имён несколько.
+
+    Первая похожая подпись не выбирается. Тип и родитель сужают выбор, только когда имён несколько.
+    Единственная точная подпись берётся и при другом типе: тип тогда наблюдают, а не запрещают шаг.
+    """
+    pool = exact_named(candidates, name)
+    rejected = {canonical_role(item) for item in (reject_roles or []) if item}
+    if rejected:
+        kept = [item for item in pool if item.get("role") not in rejected]
+        if pool and not kept:
+            raise RejectedOnly(name)
+        pool = kept
+    if not pool:
+        raise LookupError(name)
+    if within:
+        token = norm(within)
+        scoped = [item for item in pool if any(token in norm(parent) for parent in item.get("parents") or [])]
+        if scoped:
+            pool = scoped
+        elif len(pool) != 1:
+            raise AmbiguousTarget(name, len(pool), f"не внутри «{within}»")
+    if row_label:
+        labels = exact_named(candidates, row_label)
+        if len(labels) == 1:
+            line = _center_y(labels[0])
+            pool = [item for item in pool if abs(_center_y(item) - line) <= 10]
+            if not pool:
+                raise LookupError(name)
+        elif len(pool) != 1:
+            raise AmbiguousTarget(name, len(pool), "одна строка не выделена")
+    if len(pool) > 1 and role:
+        wanted_role = canonical_role(role)
+        typed = [item for item in pool if item.get("role") == wanted_role]
+        if typed:
+            pool = typed
+    if len(pool) != 1:
+        raise AmbiguousTarget(name, len(pool), "точное имя")
+    return pool[0], "точное имя"
+
+
 def save_diagnostics(session, folder: Path, reason: str = "") -> dict:
     """Снимок экрана и список элементов. Пишется при любой остановке."""
     folder.mkdir(parents=True, exist_ok=True)
@@ -255,13 +413,17 @@ class FakeSession:
         for item in names:
             if isinstance(item, dict):
                 title = item.get("name") or ""
-                self.controls.append({
+                control = {
                     "name": title,
                     "role": canonical_role(item.get("role") or item.get("control_type") or "menu"),
                     "parents": list(item.get("parents") or ([item["parent"]] if item.get("parent") else [])),
                     "visible": item.get("visible", True),
                     "value": str(item.get("value", self.values.get(title, ""))),
-                })
+                }
+                for key in ("left", "top", "right", "bottom", "texts"):
+                    if key in item:
+                        control[key] = item[key]
+                self.controls.append(control)
             else:
                 self.controls.append({
                     "name": item,
@@ -363,9 +525,74 @@ class FakeSession:
                 return Found(
                     name=title,
                     value=str(chosen.get("value") or self.values.get(title, "")),
+                    left=int(chosen.get("left", 40)),
+                    top=int(chosen.get("top", 80)),
+                    right=int(chosen.get("right", 240)),
+                    bottom=int(chosen.get("bottom", 120)),
                     role=chosen.get("role") or "",
                     parents=tuple(chosen.get("parents") or []),
                     ambiguous=several,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                raise LookupError(name)
+            time.sleep(0.01)
+
+    def find_unique(self, name: str, timeout: float = 0.2, role: str = "", within: str = "") -> Found:
+        """Один видимый элемент. Похожие подписи не склеиваются в «первый попавшийся»."""
+        self.watcher.poll()
+        deadline = time.time() + timeout
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = unique_match(self.controls, name, role, within)
+            except (AmbiguousTarget, RoleMismatch, ParentMismatch):
+                raise
+            except LookupError:
+                chosen = None
+            if chosen is not None:
+                title = chosen["name"]
+                return Found(
+                    name=title,
+                    value=str(chosen.get("value") or self.values.get(title, "")),
+                    left=int(chosen.get("left", 40)),
+                    top=int(chosen.get("top", 80)),
+                    right=int(chosen.get("right", 240)),
+                    bottom=int(chosen.get("bottom", 120)),
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                raise LookupError(name)
+            time.sleep(0.01)
+
+    def find_exact(self, name: str, timeout: float = 0.2, role: str = "", within: str = "", row_label: str = "", reject_roles=()) -> Found:
+        """Точное имя. Единственная подпись берётся даже если тип в сценарии другой."""
+        self.watcher.poll()
+        deadline = time.time() + timeout
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = exact_match(self.controls, name, role, within, row_label, reject_roles)
+            except (AmbiguousTarget, RejectedOnly):
+                raise
+            except LookupError:
+                chosen = None
+                note = ""
+            if chosen is not None:
+                title = chosen["name"]
+                return Found(
+                    name=title,
+                    value=str(chosen.get("value") or self.values.get(title, "")),
+                    left=int(chosen.get("left", 40)),
+                    top=int(chosen.get("top", 80)),
+                    right=int(chosen.get("right", 240)),
+                    bottom=int(chosen.get("bottom", 120)),
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
                     note=note,
                 )
             if time.time() >= deadline:
@@ -560,12 +787,74 @@ class PywinautoSession:
         return (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
 
     def move_cursor(self, x: int, y: int) -> None:
+        self.cursor = (int(x), int(y))
         try:
             import ctypes
 
             ctypes.windll.user32.SetCursorPos(int(x), int(y))
         except Exception:
             pass
+
+    def find_unique(self, name: str, timeout: float = 8, role: str = "", within: str = "") -> Found:
+        """Один элемент. Если подпись повторяется, поиск останавливается, а не берёт первый."""
+        deadline = time.time() + timeout
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = unique_match(self._snapshot(), name, role, within)
+            except (AmbiguousTarget, RoleMismatch, ParentMismatch):
+                raise
+            except LookupError:
+                chosen = None
+            if chosen is not None:
+                left, top, right, bottom = chosen["box"]
+                return Found(
+                    name=chosen["name"],
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                    raw=chosen["raw"],
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                raise LookupError(name)
+            self._cache = None
+            time.sleep(0.45)
+
+    def find_exact(self, name: str, timeout: float = 8, role: str = "", within: str = "", row_label: str = "", reject_roles=()) -> Found:
+        """Точное имя на живом окне. Тип не запрещает единственную подходящую подпись."""
+        deadline = time.time() + timeout
+        while True:
+            self.watcher.poll()
+            try:
+                chosen, note = exact_match(self._snapshot(), name, role, within, row_label, reject_roles)
+            except (AmbiguousTarget, RejectedOnly):
+                raise
+            except LookupError:
+                chosen = None
+                note = ""
+            if chosen is not None:
+                left, top, right, bottom = chosen["box"]
+                return Found(
+                    name=chosen["name"],
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                    raw=chosen["raw"],
+                    role=chosen.get("role") or "",
+                    parents=tuple(chosen.get("parents") or []),
+                    ambiguous=False,
+                    note=note,
+                )
+            if time.time() >= deadline:
+                raise LookupError(name)
+            self._cache = None
+            time.sleep(0.45)
 
     def _snapshot(self) -> list[dict]:
         if self._cache is not None and time.time() - self._cache_at < 1:
