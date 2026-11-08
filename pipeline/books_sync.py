@@ -17,7 +17,7 @@ from pathlib import Path
 from pipeline.postprod import write_srt
 from pipeline.pronunciation import strip_stress
 from pipeline.tts import read_dotenv, speak_clip, speech_cache_file
-from pipeline.ui_session import AmbiguousTarget, ParentMismatch, RoleMismatch, guard_name
+from pipeline.ui_session import AmbiguousTarget, ParentMismatch, RoleMismatch, canonical_role, guard_name
 
 LILY_VOICE = "pFZP5JQG7iQjIQuC4Bku"
 LILY_MODEL = "eleven_multilingual_v2"
@@ -154,6 +154,7 @@ def _sentences(text: str) -> list[str]:
 def beats_from_lesson(lesson: dict) -> list[dict]:
     if lesson.get("recording") != "synced":
         raise ValueError("У урока нет признака recording: synced.")
+    observed = lesson.get("uia_observed") or {}
     beats = []
     for scene in lesson.get("scenes") or []:
         sync = scene.get("sync") or {}
@@ -180,6 +181,17 @@ def beats_from_lesson(lesson: dict) -> list[dict]:
         if str(sync.get("value") or "") in RESERVED_NUMBERS:
             raise ValueError(f"Шаг {beat_id}: нельзя снова записывать номер {sync.get('value')}.")
         guard_name(element)
+        seen = observed.get(beat_id)
+        if seen:
+            declared = str(seen.get("type") or "")
+            if canonical_role(declared) != canonical_role(str(sync.get("role") or "")):
+                raise ValueError(
+                    f"Шаг {beat_id}: снимок экрана дал тип «{declared}», а в шаге указана роль «{sync.get('role')}»."
+                )
+            if str(seen.get("name") or "") != element:
+                raise ValueError(f"Шаг {beat_id}: в снимке другое имя, чем в шаге.")
+            if "within" in seen and str(seen.get("within") or "") != str(sync.get("within") or ""):
+                raise ValueError(f"Шаг {beat_id}: родитель в снимке не совпал с полем within.")
         beats.append(
             {
                 "id": beat_id,
@@ -200,8 +212,12 @@ def beats_from_lesson(lesson: dict) -> list[dict]:
                 "rescan_after": bool(sync.get("rescan_after")),
                 "mutates": bool(sync.get("mutates")),
                 "uses_number": PLACEHOLDER in narration or PLACEHOLDER in str(sync.get("value") or ""),
+                "uia_confirmed": bool(seen),
             }
         )
+    unknown = [key for key in observed if key not in {beat["id"] for beat in beats}]
+    if unknown:
+        raise ValueError("В снимке экрана указан неизвестный шаг: " + ", ".join(unknown))
     if not beats or not beats[0]["required_now"]:
         raise ValueError("Первый шаг должен быть виден до записи: у него нужен required_now.")
     covers = {beat["covers"] for beat in beats}
@@ -399,6 +415,7 @@ def preflight_synced(session, lesson: dict, now: datetime | None = None) -> dict
             "element": beat["element"],
             "kind": beat["kind"],
             "covers": beat["covers"],
+            "uia_confirmed": beat["uia_confirmed"],
             "found": False,
             "ambiguous": False,
             "note": "",

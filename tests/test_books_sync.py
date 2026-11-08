@@ -487,7 +487,7 @@ class TabItemPreflightTest(unittest.TestCase):
 
     UIA_BY_STEP = {
         "open-purchases": "ControlType.TabItem",
-        "open-list": "ControlType.Hyperlink",
+        "open-list": "ControlType.MenuItem",
         "open-create": "ControlType.Button",
         "choose-goods": "ControlType.MenuItem",
         "incoming-number": "ControlType.Edit",
@@ -527,6 +527,7 @@ class TabItemPreflightTest(unittest.TestCase):
         self.assertEqual(canonical_role("ControlType.CheckBox"), "check")
         self.assertEqual(canonical_role("ControlType.RadioButton"), "check")
         self.assertEqual(canonical_role("ControlType.Table"), "other")
+        self.assertEqual([beat["id"] for beat in beats if beat["uia_confirmed"]], ["open-purchases", "open-list"])
         seen = set()
         for beat in beats:
             seen.add(beat["id"])
@@ -642,6 +643,75 @@ class TabItemPreflightTest(unittest.TestCase):
         self.assertFalse(report["document_modified"])
         self.assertIn("tab", report["message"])
         self.assertIn("menu", report["message"])
+
+
+class PurchasesMenuDumpTest(unittest.TestCase):
+    """Узел 93 снимка 2026-11-08: журнал поступлений — MenuItem, не Hyperlink."""
+
+    def session(self):
+        payload = json.loads((ROOT / "tests" / "fixtures" / "purchases-menu-2026-11-08.json").read_text(encoding="utf-8"))
+        by_id = {node["id"]: node for node in payload["nodes"]}
+
+        def parents(node):
+            chain = []
+            parent = by_id.get(node["parent"])
+            while parent:
+                if parent.get("name"):
+                    chain.append(parent["name"])
+                parent = by_id.get(parent["parent"])
+            return chain
+
+        controls = []
+        for node in payload["nodes"]:
+            box = node["bounds"]
+            controls.append({
+                "name": node["name"],
+                "role": node["type"],
+                "parents": parents(node),
+                "visible": not node["offscreen"],
+                "left": box["x"],
+                "top": box["y"],
+                "right": box["x"] + box["width"],
+                "bottom": box["y"] + box["height"],
+            })
+        controls.append({"name": "Альфа ООО", "role": "text", "parents": [], "visible": True, "value": "Альфа ООО"})
+        return FakeSession(controls, texts=["Альфа ООО", "Организация: Альфа ООО"])
+
+    def test_open_list_uses_the_menu_item_and_not_a_lookalike(self):
+        lesson = load_lesson(LESSON_PATH)
+        session = self.session()
+        report = books_sync.preflight_synced(session, lesson, now=WHEN)
+        row = next(item for item in report["steps"] if item["step"] == "open-list")
+        self.assertTrue(row["found"], row["note"])
+        self.assertTrue(row["uia_confirmed"])
+        self.assertEqual(session.clicks, [])
+        self.assertEqual(session.fills, [])
+        found = session.find_unique(
+            "Поступление (акты, накладные, УПД)",
+            timeout=0.05,
+            role="menu",
+            within="Покупки",
+        )
+        self.assertEqual(found.left, 206)
+        self.assertEqual(found.top, 207)
+        self.assertEqual(found.right, 452)
+        self.assertEqual(found.bottom, 227)
+        with self.assertRaises(RoleMismatch) as caught:
+            session.find_unique(
+                "Поступление (акты, накладные, УПД)",
+                timeout=0.05,
+                role="hyperlink",
+                within="Покупки",
+            )
+        self.assertEqual(caught.exception.roles, ["menu"])
+        from pipeline.ui_session import AmbiguousTarget
+
+        with self.assertRaises(AmbiguousTarget):
+            session.find_unique("Поступление", timeout=0.05, role="menu", within="Покупки")
+        later = next(item for item in report["steps"] if item["step"] == "open-upd")
+        self.assertFalse(later["found"])
+        self.assertFalse(later["uia_confirmed"])
+        self.assertNotIn("УПД", session.clicks)
 
 
 if __name__ == "__main__":

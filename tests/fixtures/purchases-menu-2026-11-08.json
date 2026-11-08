@@ -1,0 +1,22 @@
+{
+  "source": "Живой снимок меню функций после открытия раздела Покупки, 2026-11-08. Узел 93 — журнал поступлений.",
+  "nodes": [
+    {"id": 63, "parent": 50, "name": "Покупки", "type": "ControlType.TabItem", "enabled": true, "offscreen": false, "bounds": {"x": 0, "y": 203, "width": 184, "height": 36}},
+    {"id": 84, "parent": 74, "name": "Покупки", "type": "ControlType.Group", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 125, "width": 287, "height": 388}},
+    {"id": 91, "parent": 84, "name": "Доверенности", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 155, "width": 107, "height": 20}},
+    {"id": 92, "parent": 84, "name": "Счета от поставщиков", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 181, "width": 157, "height": 20}},
+    {"id": 93, "parent": 84, "name": "Поступление (акты, накладные, УПД)", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 207, "width": 246, "height": 20}},
+    {"id": 94, "parent": 84, "name": "Поступление доп. расходов", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 233, "width": 191, "height": 20}},
+    {"id": 95, "parent": 84, "name": "Поступление билетов", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 259, "width": 151, "height": 20}},
+    {"id": 96, "parent": 84, "name": "Передача товаров комитенту", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 285, "width": 197, "height": 20}},
+    {"id": 97, "parent": 84, "name": "Отчеты комитентам", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 311, "width": 139, "height": 20}},
+    {"id": 98, "parent": 84, "name": "Акты о расхождениях", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 337, "width": 154, "height": 20}},
+    {"id": 99, "parent": 84, "name": "Возвраты поставщикам", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 363, "width": 165, "height": 20}},
+    {"id": 100, "parent": 84, "name": "Корректировка поступления", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 389, "width": 190, "height": 20}},
+    {"id": 101, "parent": 84, "name": "Счета-фактуры полученные", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 415, "width": 188, "height": 20}},
+    {"id": 102, "parent": 84, "name": "Авансовые отчеты", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 441, "width": 134, "height": 20}},
+    {"id": 103, "parent": 84, "name": "Путевые листы", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 467, "width": 113, "height": 20}},
+    {"id": 104, "parent": 84, "name": "Реестры выплат самозанятым", "type": "ControlType.MenuItem", "enabled": true, "offscreen": false, "bounds": {"x": 206, "y": 493, "width": 203, "height": 20}},
+    {"id": 216, "parent": 208, "name": "УПД", "type": "ControlType.Button", "enabled": true, "offscreen": false, "bounds": {"x": 742, "y": 363, "width": 59, "height": 27}}
+  ]
+}
